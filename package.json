@@ -1,0 +1,26 @@
+{
+  "name": "catunleash",
+  "version": "1.0.0",
+  "description": "An Aztec-inspired 3D endless runner about building an unstoppable cat pack.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "threejs",
+    "game",
+    "endless-runner"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
+  }
+}

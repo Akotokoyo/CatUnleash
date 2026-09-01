@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#071b1b" />
+    <meta name="description" content="CatUnleashed — raduna il branco e corri attraverso un impero azteco infinito." />
+    <title>CatUnleashed</title>
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="game" aria-label="CatUnleashed"></canvas>
+
+      <section id="hud" class="hidden" aria-live="polite">
+        <div class="hud-stat"><span>DISTANZA</span><strong id="score">0</strong></div>
+        <div class="hud-stat cats"><span>BRANCO</span><strong id="cats">1</strong></div>
+        <div class="hud-stat"><span>VELOCITÀ</span><strong id="speed">1.0×</strong></div>
+        <div class="hud-stat tuna"><span>TONNO</span><strong id="tuna">0/20</strong></div>
+        <div class="hud-stat lives"><span>VITE</span><strong id="lives">0</strong></div>
+      </section>
+
+      <section id="menu" class="panel">
+        <p class="eyebrow">LA CORSA IN CITTÀ</p>
+        <h1>CAT<span>UNLEASHED</span></h1>
+        <p class="tagline">Raduna il branco. Domina la città.</p>
+        <button id="play" class="sun-button" type="button">GIOCA</button>
+        <div class="instructions">
+          <div><b>🥛</b><span>Latte<br /><small>+1 gatto</small></span></div>
+          <div><b>🐟</b><span>Tonno<br /><small>20 = +1 vita</small></span></div>
+          <div><b>🐭</b><span>Topi<br /><small>rischio + punti</small></span></div>
+          <div><b>🚧</b><span>Barriere<br /><small>KO immediato</small></span></div>
+        </div>
+        <p class="controls">Scorri o usa ← → per cambiare corsia</p>
+      </section>
+
+      <section id="gameover" class="panel hidden">
+        <p class="eyebrow">IL SOLE TRAMONTA</p>
+        <h2>FINE CORSA</h2>
+        <div class="result"><span>PUNTEGGIO</span><strong id="final-score">0</strong></div>
+        <div class="result-row">
+          <span>Distanza <b id="final-distance">0m</b></span>
+          <span>Topi <b id="final-mice">0</b></span>
+        </div>
+        <button id="restart" class="sun-button" type="button">RIPROVA</button>
+      </section>
+
+      <button id="sound" type="button" aria-label="Attiva o disattiva audio">♪</button>
+      <div id="toast" role="status"></div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
