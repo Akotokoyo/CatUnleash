@@ -1,52 +1,62 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#071b1b" />
-    <meta name="description" content="CatUnleashed — raduna il branco e corri attraverso un impero azteco infinito." />
+    <meta name="description" content="CatUnleashed — build your cat pack across an endless sequence of worlds." />
     <title>CatUnleashed</title>
-    <script type="module" crossorigin src="./assets/index-gZPwJ_3L.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-DHjiAazi.css">
+    <script type="module" crossorigin src="./assets/index-CmoaUZTm.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DanvEgAC.css">
   </head>
   <body>
     <main id="app">
       <canvas id="game" aria-label="CatUnleashed"></canvas>
 
       <section id="hud" class="hidden" aria-live="polite">
-        <div class="hud-stat"><span>DISTANZA</span><strong id="score">0</strong></div>
-        <div class="hud-stat cats"><span>BRANCO</span><strong id="cats">1</strong></div>
-        <div class="hud-stat"><span>VELOCITÀ</span><strong id="speed">1.0×</strong></div>
-        <div class="hud-stat tuna"><span>TONNO</span><strong id="tuna">0/20</strong></div>
-        <div class="hud-stat lives"><span>VITE</span><strong id="lives">0</strong></div>
+        <div class="hud-stat"><span data-i18n="hud.distance">DISTANCE</span><strong id="score">0</strong></div>
+        <div class="hud-stat cats"><span data-i18n="hud.pack">PACK</span><strong id="cats">1</strong></div>
+        <div class="hud-stat"><span data-i18n="hud.speed">SPEED</span><strong id="speed">1.0×</strong></div>
+        <div class="hud-stat tuna"><span data-i18n="hud.tuna">TUNA</span><strong id="tuna">0/20</strong></div>
+        <div class="hud-stat lives"><span data-i18n="hud.lives">LIVES</span><strong id="lives">0</strong></div>
       </section>
 
       <section id="menu" class="panel">
-        <p class="eyebrow">LA CORSA IN CITTÀ</p>
-        <h1>CAT<span>UNLEASHED</span></h1>
-        <p class="tagline">Raduna il branco. Domina la città.</p>
-        <button id="play" class="sun-button" type="button">GIOCA</button>
-        <div class="instructions">
-          <div><b>🥛</b><span>Latte<br /><small>+1 gatto</small></span></div>
-          <div><b>🐟</b><span>Tonno<br /><small>20 = +1 vita</small></span></div>
-          <div><b>🐭</b><span>Topi<br /><small>rischio + punti</small></span></div>
-          <div><b>🚧</b><span>Barriere<br /><small>KO immediato</small></span></div>
+        <div class="language-picker">
+          <label for="language">🌐</label>
+          <select id="language" aria-label="Language">
+            <option value="en" selected>English</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="es">Español</option>
+            <option value="it">Italiano</option>
+          </select>
         </div>
-        <p class="controls">Scorri o usa ← → per cambiare corsia</p>
+        <p class="eyebrow" data-i18n="menu.eyebrow">THE CITY RUN</p>
+        <h1>CAT<span>UNLEASHED</span></h1>
+        <p class="tagline" data-i18n="menu.tagline">Build the pack. Rule every world.</p>
+        <button id="play" class="sun-button" type="button" data-i18n="menu.play">PLAY</button>
+        <div class="instructions">
+          <div><b>🥛</b><span><span data-i18n="menu.milk">Milk</span><br /><small data-i18n="menu.milkHint">+1 cat</small></span></div>
+          <div><b>🐟</b><span><span data-i18n="menu.tuna">Tuna</span><br /><small data-i18n="menu.tunaHint">20 = +1 life</small></span></div>
+          <div><b>🐭</b><span><span data-i18n="menu.mice">Mice</span><br /><small data-i18n="menu.miceHint">risk + points</small></span></div>
+          <div><b>🚧</b><span><span data-i18n="menu.barriers">Barriers</span><br /><small data-i18n="menu.barriersHint">instant KO</small></span></div>
+        </div>
+        <p class="controls" data-i18n="menu.controls">Swipe or use ← → to change lane</p>
       </section>
 
       <section id="gameover" class="panel hidden">
-        <p class="eyebrow">IL SOLE TRAMONTA</p>
-        <h2>FINE CORSA</h2>
-        <div class="result"><span>PUNTEGGIO</span><strong id="final-score">0</strong></div>
+        <p class="eyebrow" data-i18n="over.eyebrow">THE RUN ENDS</p>
+        <h2 data-i18n="over.title">RUN OVER</h2>
+        <div class="result"><span data-i18n="over.score">SCORE</span><strong id="final-score">0</strong></div>
         <div class="result-row">
-          <span>Distanza <b id="final-distance">0m</b></span>
-          <span>Topi <b id="final-mice">0</b></span>
+          <span><span data-i18n="over.distance">Distance</span> <b id="final-distance">0m</b></span>
+          <span><span data-i18n="over.mice">Mice</span> <b id="final-mice">0</b></span>
         </div>
-        <button id="restart" class="sun-button" type="button">RIPROVA</button>
+        <button id="restart" class="sun-button" type="button" data-i18n="over.retry">TRY AGAIN</button>
       </section>
 
-      <button id="sound" type="button" aria-label="Attiva o disattiva audio">♪</button>
+      <button id="sound" type="button" aria-label="Toggle sound">♪</button>
       <div id="toast" role="status"></div>
     </main>
   </body>

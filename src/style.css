@@ -104,6 +104,26 @@ body {
   letter-spacing: .25em;
 }
 
+.language-picker {
+  position: absolute;
+  top: 12px;
+  right: 15px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.language-picker select {
+  max-width: 92px;
+  padding: 3px 6px;
+  color: #e9fff5;
+  font: 700 11px "Baloo 2", sans-serif;
+  border: 1px solid #5e9d89;
+  border-radius: 8px;
+  outline: none;
+  background: #071f1e;
+}
+
 h1, h2 {
   margin: 4px 0;
   color: #f7d15d;

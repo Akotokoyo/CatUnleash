@@ -1,11 +1,13 @@
 {
   "name": "catunleash",
   "version": "1.0.0",
-  "description": "An Aztec-inspired 3D endless runner about building an unstoppable cat pack.",
+  "description": "A colorful 3D endless runner about building an unstoppable cat pack.",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "android:sync": "npm run build && cap sync android",
+    "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug"
   },
   "keywords": [
     "threejs",
@@ -16,9 +18,12 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/core": "^8.5.1",
     "three": "^0.185.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.1",
     "@types/three": "^0.185.4",
     "typescript": "^7.0.2",
     "vite": "^8.2.2"

@@ -1,0 +1,29 @@
+# Dependencies and web output
+node_modules/
+dist/
+.vite/
+coverage/
+
+# Logs and local environment
+*.log
+npm-debug.log*
+.env
+.env.*
+!.env.example
+
+# Android generated and machine-specific files
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/gradle-hosts.txt
+*.apk
+*.aab
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+desktop.ini

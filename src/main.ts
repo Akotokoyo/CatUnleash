@@ -1,6 +1,14 @@
 import * as THREE from "three";
 import "./style.css";
 import { CityAudio } from "./audio";
+import {
+  ENVIRONMENTS,
+  getEnvironment,
+  makeEnvironmentDecor,
+  makeEnvironmentSky,
+  makeEnvironmentTrack,
+} from "./environments";
+import { translate, type Language, type TranslationKey } from "./i18n";
 
 type RunState = "menu" | "running" | "gameover";
 type PickupType = "milk" | "tuna" | "mouse" | "obstacle";
@@ -13,6 +21,19 @@ interface RunnerObject {
   phase: number;
 }
 
+interface EnvironmentTransition {
+  oldSky: THREE.Group;
+  newSky: THREE.Group;
+  fromBackground: THREE.Color;
+  toBackground: THREE.Color;
+  fromFog: THREE.Color;
+  toFog: THREE.Color;
+  fromSun: THREE.Color;
+  toSun: THREE.Color;
+  elapsed: number;
+  duration: number;
+}
+
 const LANES = [-2.7, 0, 2.7];
 const TRACK_LENGTH = 14;
 const TRACK_TILES = 10;
@@ -23,9 +44,6 @@ const terracotta = new THREE.MeshStandardMaterial({ color: 0xac4f2d, roughness: 
 const cream = new THREE.MeshStandardMaterial({ color: 0xf7e3a6, roughness: 0.72 });
 const obsidian = new THREE.MeshStandardMaterial({ color: 0x13201e, roughness: 0.35, metalness: 0.25 });
 const mouseMat = new THREE.MeshStandardMaterial({ color: 0x7b665c, roughness: 0.85 });
-const asphalt = new THREE.MeshStandardMaterial({ color: 0x343b43, roughness: 0.96 });
-const concrete = new THREE.MeshStandardMaterial({ color: 0xa9adb0, roughness: 0.9 });
-const roadPaint = new THREE.MeshStandardMaterial({ color: 0xf6df88, roughness: 0.78 });
 
 const canvas = mustElement<HTMLCanvasElement>("game");
 
@@ -36,6 +54,7 @@ const ui = {
   play: mustElement<HTMLButtonElement>("play"),
   restart: mustElement<HTMLButtonElement>("restart"),
   sound: mustElement<HTMLButtonElement>("sound"),
+  language: mustElement<HTMLSelectElement>("language"),
   score: mustElement("score"),
   cats: mustElement("cats"),
   speed: mustElement("speed"),
@@ -79,6 +98,8 @@ const objectRoot = new THREE.Group();
 const playerRoot = new THREE.Group();
 world.add(trackRoot, decorRoot, objectRoot, playerRoot);
 scene.add(world);
+const skyRoot = new THREE.Group();
+scene.add(skyRoot);
 
 const audio = new CityAudio();
 const timer = new THREE.Timer();
@@ -105,10 +126,14 @@ let stridePhase = 0;
 let invulnerableUntil = 0;
 let swipeStartX = 0;
 let toastTimer = 0;
+let environmentIndex = 0;
+let transitionTilesRemaining = 0;
+let environmentTransition: EnvironmentTransition | undefined;
+let language: Language = "en";
 
-createSky();
-createTrack();
+setEnvironment(0);
 rebuildPack();
+applyLanguage();
 bindControls();
 resize();
 renderer.setAnimationLoop(update);
@@ -119,129 +144,121 @@ function mustElement<T extends HTMLElement = HTMLElement>(id: string): T {
   return element as T;
 }
 
-function createSky(): void {
-  const sunDisc = new THREE.Mesh(
-    new THREE.CircleGeometry(7, 48),
-    new THREE.MeshBasicMaterial({ color: 0xffe59b, fog: false }),
-  );
-  sunDisc.position.set(-24, 25, -110);
-  scene.add(sunDisc);
-
-  const cloudMaterial = new THREE.MeshBasicMaterial({ color: 0xf5fbff, transparent: true, opacity: 0.72, fog: false });
-  for (let i = 0; i < 8; i += 1) {
-    const cloud = new THREE.Group();
-    for (let puff = 0; puff < 4; puff += 1) {
-      const mesh = new THREE.Mesh(new THREE.SphereGeometry(1.8 + (puff % 2) * 0.6, 10, 7), cloudMaterial);
-      mesh.position.set(puff * 2.1, Math.sin(puff) * 0.5, 0);
-      mesh.scale.y = 0.65;
-      cloud.add(mesh);
-    }
-    cloud.position.set(-35 + (i % 4) * 24, 16 + (i % 3) * 5, -60 - Math.floor(i / 4) * 35);
-    scene.add(cloud);
-  }
+function t(key: TranslationKey, values: Record<string, string | number> = {}): string {
+  return translate(language, key, values);
 }
 
-function createTrack(): void {
+function applyLanguage(): void {
+  document.documentElement.lang = language;
+  document.querySelectorAll<HTMLElement>("[data-i18n]").forEach((element) => {
+    const key = element.dataset.i18n as TranslationKey | undefined;
+    if (key) element.textContent = t(key);
+  });
+  ui.sound.setAttribute("aria-label", t("sound.label"));
+}
+
+function setEnvironment(index: number): void {
+  environmentIndex = index % ENVIRONMENTS.length;
+  environmentTransition = undefined;
+  transitionTilesRemaining = 0;
+  const theme = getEnvironment(environmentIndex);
+  disposeGroup(trackRoot);
+  disposeGroup(decorRoot);
+  disposeGroup(skyRoot);
+  trackRoot.clear();
+  decorRoot.clear();
+  skyRoot.clear();
+  trackTiles.length = 0;
+  decorTiles.length = 0;
+  scene.background = new THREE.Color(theme.sky);
+  scene.fog = new THREE.Fog(theme.fog, theme.id === "space" ? 58 : 48, theme.id === "space" ? 145 : 125);
+  sun.color.set(theme.sun);
+  sun.intensity = theme.id === "space" || theme.id === "dimension" ? 1.8 : 3.1;
+  skyRoot.add(makeEnvironmentSky(environmentIndex));
+
   for (let i = 0; i < TRACK_TILES; i += 1) {
-    const tile = makeTrackTile();
+    const tile = makeEnvironmentTrack(environmentIndex, TRACK_LENGTH);
     tile.position.z = PLAYER_Z - i * TRACK_LENGTH;
     trackTiles.push(tile);
     trackRoot.add(tile);
 
-    const decor = makeDecorTile(i);
+    const decor = makeEnvironmentDecor(environmentIndex, i);
     decor.position.z = PLAYER_Z - i * TRACK_LENGTH;
     decorTiles.push(decor);
     decorRoot.add(decor);
   }
 }
 
-function makeTrackTile(): THREE.Group {
-  const group = new THREE.Group();
-  const slab = new THREE.Mesh(new THREE.BoxGeometry(9.5, 0.55, TRACK_LENGTH), asphalt);
-  slab.receiveShadow = true;
-  group.add(slab);
-
-  for (const x of [-5.35, 5.35]) {
-    const sidewalk = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.72, TRACK_LENGTH), concrete);
-    sidewalk.position.set(x, 0.08, 0);
-    sidewalk.receiveShadow = true;
-    group.add(sidewalk);
-    const curb = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, TRACK_LENGTH), roadPaint);
-    curb.position.set(x + (x < 0 ? 0.68 : -0.68), 0.43, 0);
-    group.add(curb);
-  }
-
-  for (const x of [-1.35, 1.35]) {
-    for (let z = -5.3; z <= 5.3; z += 3.5) {
-      const dash = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.035, 1.75), roadPaint);
-      dash.position.set(x, 0.3, z);
-      group.add(dash);
-    }
-  }
-
-  return group;
+function beginEnvironmentTransition(index: number): void {
+  const nextIndex = index % ENVIRONMENTS.length;
+  if (nextIndex === environmentIndex) return;
+  const theme = getEnvironment(nextIndex);
+  const oldSky = skyRoot.children[0] as THREE.Group;
+  const newSky = makeEnvironmentSky(nextIndex);
+  setGroupOpacity(newSky, 0);
+  skyRoot.add(newSky);
+  environmentTransition = {
+    oldSky,
+    newSky,
+    fromBackground: (scene.background as THREE.Color).clone(),
+    toBackground: new THREE.Color(theme.sky),
+    fromFog: scene.fog instanceof THREE.Fog ? scene.fog.color.clone() : new THREE.Color(theme.fog),
+    toFog: new THREE.Color(theme.fog),
+    fromSun: sun.color.clone(),
+    toSun: new THREE.Color(theme.sun),
+    elapsed: 0,
+    duration: 4,
+  };
+  environmentIndex = nextIndex;
+  transitionTilesRemaining = TRACK_TILES;
 }
 
-function makeDecorTile(index: number): THREE.Group {
-  const group = new THREE.Group();
-  for (const side of [-1, 1]) {
-    const x = side * 8.7;
-    group.add(makeBuilding(x, -3.6, index * 2 + (side > 0 ? 1 : 0)));
-    group.add(makeBuilding(x, 4.4, index * 2 + (side > 0 ? 7 : 4)));
-    group.add(makeStreetLight(side * 5.25, 1.5, side));
-  }
-  return group;
-}
-
-function makeBuilding(x: number, z: number, seed: number): THREE.Group {
-  const building = new THREE.Group();
-  const colors = [0xe8755d, 0x5c8fc4, 0xe2b65b, 0x6fa587, 0x9a78ad, 0xd9894c];
-  const width = 4.6 + (seed % 3) * 0.65;
-  const height = 6 + (seed % 5) * 1.65;
-  const depth = 5.5;
-  const wallMaterial = new THREE.MeshStandardMaterial({ color: colors[seed % colors.length], roughness: 0.86 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), wallMaterial);
-  body.position.y = height / 2;
-  body.castShadow = true;
-  body.receiveShadow = true;
-  building.add(body);
-
-  const windowMaterial = new THREE.MeshStandardMaterial({
-    color: seed % 2 === 0 ? 0x9fe1f2 : 0xffd77d,
-    emissive: seed % 2 === 0 ? 0x163b4b : 0x4c3611,
-    emissiveIntensity: 0.35,
-    roughness: 0.28,
-  });
-  for (let floor = 1.5; floor < height - 0.6; floor += 1.65) {
-    for (const windowX of [-width * 0.25, width * 0.25]) {
-      const windowMesh = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.82, 0.08), windowMaterial);
-      windowMesh.position.set(windowX, floor, depth / 2 + 0.05);
-      building.add(windowMesh);
-    }
-  }
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(width + 0.3, 0.28, depth + 0.3), concrete);
-  roof.position.y = height + 0.12;
-  building.add(roof);
-  building.position.set(x, -0.2, z);
-  return building;
-}
-
-function makeStreetLight(x: number, z: number, side: number): THREE.Group {
-  const light = new THREE.Group();
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 4.2, 8), obsidian);
-  pole.position.y = 2.1;
-  light.add(pole);
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.1, 0.1), obsidian);
-  arm.position.set(-side * 0.36, 4.1, 0);
-  light.add(arm);
-  const lamp = new THREE.Mesh(
-    new THREE.SphereGeometry(0.2, 8, 6),
-    new THREE.MeshStandardMaterial({ color: 0xffdf78, emissive: 0xffb62e, emissiveIntensity: 1.4 }),
+function updateEnvironmentTransition(delta: number): void {
+  const transition = environmentTransition;
+  if (!transition) return;
+  transition.elapsed += delta;
+  const progress = THREE.MathUtils.smoothstep(
+    Math.min(1, transition.elapsed / transition.duration),
+    0,
+    1,
   );
-  lamp.position.set(-side * 0.75, 3.98, 0);
-  light.add(lamp);
-  light.position.set(x, 0.4, z);
-  return light;
+  (scene.background as THREE.Color).lerpColors(transition.fromBackground, transition.toBackground, progress);
+  if (scene.fog instanceof THREE.Fog) {
+    scene.fog.color.lerpColors(transition.fromFog, transition.toFog, progress);
+  }
+  sun.color.lerpColors(transition.fromSun, transition.toSun, progress);
+  setGroupOpacity(transition.oldSky, 1 - progress);
+  setGroupOpacity(transition.newSky, progress);
+  if (progress < 1) return;
+  skyRoot.remove(transition.oldSky);
+  disposeGroup(transition.oldSky);
+  setGroupOpacity(transition.newSky, 1);
+  environmentTransition = undefined;
+}
+
+function setGroupOpacity(group: THREE.Group, factor: number): void {
+  group.traverse((object) => {
+    if (!(object instanceof THREE.Mesh || object instanceof THREE.Points)) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const item of materials) {
+      const baseOpacity = typeof item.userData.baseOpacity === "number"
+        ? item.userData.baseOpacity
+        : item.opacity;
+      item.userData.baseOpacity = baseOpacity;
+      item.opacity = baseOpacity * factor;
+      item.transparent = factor < 1 || baseOpacity < 1;
+      item.needsUpdate = true;
+    }
+  });
+}
+
+function disposeGroup(group: THREE.Group): void {
+  group.traverse((object) => {
+    if (!(object instanceof THREE.Mesh || object instanceof THREE.Points)) return;
+    object.geometry.dispose();
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const item of materials) item.dispose();
+  });
 }
 
 function makeCat(color = 0xe48b31): THREE.Group {
@@ -284,7 +301,7 @@ function makeCat(color = 0xe48b31): THREE.Group {
 
 function rebuildPack(): void {
   playerRoot.clear();
-  const shown = Math.min(catCount, 13);
+  const shown = Math.min(catCount, 7);
   for (let i = 0; i < shown; i += 1) {
     const palette = [0xe58a31, 0xf1d28a, 0x57514c, 0xc9613d, 0xe3e0d2];
     const cat = makeCat(palette[i % palette.length]);
@@ -479,6 +496,7 @@ function startRun(): void {
   runTime = 0;
   stridePhase = 0;
   invulnerableUntil = 0;
+  setEnvironment(0);
   rebuildPack();
   updateResourceHud();
   playerRoot.position.x = targetX;
@@ -486,7 +504,7 @@ function startRun(): void {
   ui.gameover.classList.add("hidden");
   ui.hud.classList.remove("hidden");
   audio.start();
-  showToast("CORRI!");
+  showToast(t("toast.run"));
 }
 
 function endRun(): void {
@@ -517,6 +535,10 @@ function shiftLane(direction: number): void {
 function bindControls(): void {
   ui.play.addEventListener("click", startRun);
   ui.restart.addEventListener("click", startRun);
+  ui.language.addEventListener("change", () => {
+    language = ui.language.value as Language;
+    applyLanguage();
+  });
   ui.sound.addEventListener("click", () => {
     const muted = audio.toggle();
     ui.sound.textContent = muted ? "×" : "♪";
@@ -563,10 +585,11 @@ function update(): void {
   timer.update();
   const delta = Math.min(timer.getDelta(), 0.05);
   elapsed += delta;
+  updateEnvironmentTransition(delta);
 
   if (state === "running") {
     runTime += delta;
-    const speed = 12 * Math.min(5, Math.pow(1 + runTime / 45, 1.25));
+    const speed = 12 * Math.min(7, Math.pow(1 + runTime / 45, 1.25));
     const travel = speed * delta;
     stridePhase += delta * speed * 0.34;
     distance += travel * 0.34;
@@ -582,7 +605,11 @@ function update(): void {
     const nextLevel = Math.floor(distance / 250) + 1;
     if (nextLevel > level) {
       level = nextLevel;
-      showToast(`LIVELLO ${level}`);
+      beginEnvironmentTransition(level - 1);
+      showToast(t("toast.level", {
+        level,
+        world: t(getEnvironment(environmentIndex).nameKey),
+      }));
       audio.victory();
     }
     ui.score.textContent = String(scoreValue());
@@ -599,15 +626,35 @@ function update(): void {
 }
 
 function moveWorld(travel: number): void {
-  for (const tile of trackTiles) {
+  for (let index = 0; index < trackTiles.length; index += 1) {
+    const tile = trackTiles[index];
+    const decor = decorTiles[index];
     tile.position.z += travel;
-    if (tile.position.z > PLAYER_Z + TRACK_LENGTH) tile.position.z -= TRACK_LENGTH * TRACK_TILES;
-  }
-  for (const decor of decorTiles) {
     decor.position.z += travel;
-    if (decor.position.z > PLAYER_Z + TRACK_LENGTH) decor.position.z -= TRACK_LENGTH * TRACK_TILES;
+    if (tile.position.z <= PLAYER_Z + TRACK_LENGTH) continue;
+    const wrappedZ = tile.position.z - TRACK_LENGTH * TRACK_TILES;
+    if (transitionTilesRemaining > 0) {
+      trackRoot.remove(tile);
+      decorRoot.remove(decor);
+      disposeGroup(tile);
+      disposeGroup(decor);
+      const nextTile = makeEnvironmentTrack(environmentIndex, TRACK_LENGTH);
+      const nextDecor = makeEnvironmentDecor(environmentIndex, index);
+      nextTile.position.z = wrappedZ;
+      nextDecor.position.z = wrappedZ;
+      trackTiles[index] = nextTile;
+      decorTiles[index] = nextDecor;
+      trackRoot.add(nextTile);
+      decorRoot.add(nextDecor);
+      transitionTilesRemaining -= 1;
+    } else {
+      tile.position.z = wrappedZ;
+      decor.position.z = wrappedZ;
+    }
   }
-  sun.intensity = 2.9 + Math.sin(elapsed * 0.35) * 0.25;
+  const theme = getEnvironment(environmentIndex);
+  const baseIntensity = theme.id === "space" || theme.id === "dimension" ? 1.8 : 2.9;
+  sun.intensity = baseIntensity + Math.sin(elapsed * 0.35) * 0.2;
   decorRoot.rotation.z = Math.sin(elapsed * 0.18) * 0.0015;
 }
 
@@ -655,7 +702,7 @@ function collect(object: RunnerObject): void {
     killScore += 25;
     rebuildPack();
     audio.pickup(true);
-    showToast("+1 GATTO");
+    showToast(t("toast.cat"));
     return;
   }
   if (object.type === "tuna") {
@@ -666,15 +713,15 @@ function collect(object: RunnerObject): void {
       tunaCount -= 20;
       extraLives += 1;
       audio.victory();
-      showToast("+1 VITA!");
+      showToast(t("toast.life"));
     } else {
-      showToast(`TONNO ${tunaCount}/20`);
+      showToast(t("toast.tuna", { count: tunaCount }));
     }
     updateResourceHud();
     return;
   }
   if (object.type === "obstacle") {
-    showToast("BARRIERA!");
+    showToast(t("toast.barrier"));
     loseLife();
     return;
   }
@@ -685,7 +732,7 @@ function collect(object: RunnerObject): void {
     killScore += object.strength * 85;
     rebuildPack();
     audio.victory();
-    showToast(`+${object.strength * 85} · -${object.strength} GATTI`);
+    showToast(t("toast.battle", { score: object.strength * 85, cats: object.strength }));
   } else {
     loseLife();
   }
@@ -704,7 +751,7 @@ function loseLife(): void {
   rebuildPack();
   updateResourceHud();
   audio.victory();
-  showToast("VITA EXTRA USATA!");
+  showToast(t("toast.lifeUsed"));
 }
 
 function updateResourceHud(): void {
