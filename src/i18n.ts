@@ -1,7 +1,6 @@
 export const translations = {
   en: {
     "hud.distance": "DISTANCE",
-    "hud.pack": "PACK",
     "hud.speed": "SPEED",
     "hud.mice": "SCARED",
     "hud.tuna": "TUNA",
@@ -47,7 +46,6 @@ export const translations = {
   },
   fr: {
     "hud.distance": "DISTANCE",
-    "hud.pack": "MEUTE",
     "hud.speed": "VITESSE",
     "hud.mice": "FUITE",
     "hud.tuna": "THON",
@@ -93,7 +91,6 @@ export const translations = {
   },
   de: {
     "hud.distance": "DISTANZ",
-    "hud.pack": "RUDEL",
     "hud.speed": "TEMPO",
     "hud.mice": "GEFLOHEN",
     "hud.tuna": "THUNFISCH",
@@ -139,7 +136,6 @@ export const translations = {
   },
   es: {
     "hud.distance": "DISTANCIA",
-    "hud.pack": "MANADA",
     "hud.speed": "VELOCIDAD",
     "hud.mice": "HUIDA",
     "hud.tuna": "ATÚN",
@@ -185,7 +181,6 @@ export const translations = {
   },
   it: {
     "hud.distance": "DISTANZA",
-    "hud.pack": "BRANCO",
     "hud.speed": "VELOCITÀ",
     "hud.mice": "SPAVENTATI",
     "hud.tuna": "TONNO",

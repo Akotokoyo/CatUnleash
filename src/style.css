@@ -22,9 +22,7 @@ body {
   background: radial-gradient(circle at 50% 20%, #205f57, #031313 70%);
 }
 
-body.loading {
-  background: #000;
-}
+
 
 body.loading #app {
   visibility: hidden;
@@ -86,7 +84,6 @@ body.loading #app {
   text-shadow: 0 2px #122;
 }
 
-.hud-stat.cats strong { color: #7cf2c6; }
 .hud-stat.mice strong { color: #ffb978; }
 .hud-stat.tuna strong { color: #ffcf67; }
 .hud-stat.lives strong { color: #ff8b78; }
