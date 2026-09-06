@@ -6,20 +6,23 @@
     <meta name="theme-color" content="#071b1b" />
     <meta name="description" content="CatUnleashed — build your cat pack across an endless sequence of worlds." />
     <title>CatUnleashed</title>
-    <script type="module" crossorigin src="./assets/index-CmoaUZTm.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-DanvEgAC.css">
+    <script type="module" crossorigin src="./assets/index-AhD6kL3Y.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DzSNnEEt.css">
   </head>
-  <body>
+  <body class="loading">
     <main id="app">
       <canvas id="game" aria-label="CatUnleashed"></canvas>
 
       <section id="hud" class="hidden" aria-live="polite">
         <div class="hud-stat"><span data-i18n="hud.distance">DISTANCE</span><strong id="score">0</strong></div>
         <div class="hud-stat cats"><span data-i18n="hud.pack">PACK</span><strong id="cats">1</strong></div>
+        <div class="hud-stat mice"><span data-i18n="hud.mice">SCARED</span><strong id="mice">0</strong></div>
         <div class="hud-stat"><span data-i18n="hud.speed">SPEED</span><strong id="speed">1.0×</strong></div>
         <div class="hud-stat tuna"><span data-i18n="hud.tuna">TUNA</span><strong id="tuna">0/20</strong></div>
         <div class="hud-stat lives"><span data-i18n="hud.lives">LIVES</span><strong id="lives">0</strong></div>
       </section>
+
+      <div id="fly-layer" aria-hidden="true"></div>
 
       <section id="menu" class="panel">
         <div class="language-picker">
@@ -35,11 +38,14 @@
         <p class="eyebrow" data-i18n="menu.eyebrow">THE CITY RUN</p>
         <h1>CAT<span>UNLEASHED</span></h1>
         <p class="tagline" data-i18n="menu.tagline">Build the pack. Rule every world.</p>
-        <button id="play" class="sun-button" type="button" data-i18n="menu.play">PLAY</button>
+        <div class="menu-actions">
+          <button id="continue-run" class="sun-button" type="button" data-i18n="menu.continue">CONTINUE</button>
+          <button id="new-run" class="sun-button menu-secondary" type="button" data-i18n="menu.restartZero">RESTART FROM ZERO</button>
+        </div>
         <div class="instructions">
           <div><b>🥛</b><span><span data-i18n="menu.milk">Milk</span><br /><small data-i18n="menu.milkHint">+1 cat</small></span></div>
           <div><b>🐟</b><span><span data-i18n="menu.tuna">Tuna</span><br /><small data-i18n="menu.tunaHint">20 = +1 life</small></span></div>
-          <div><b>🐭</b><span><span data-i18n="menu.mice">Mice</span><br /><small data-i18n="menu.miceHint">risk + points</small></span></div>
+          <div><b>🐶</b><span><span data-i18n="menu.mice">Pugs</span><br /><small data-i18n="menu.miceHint">risk + points</small></span></div>
           <div><b>🚧</b><span><span data-i18n="menu.barriers">Barriers</span><br /><small data-i18n="menu.barriersHint">instant KO</small></span></div>
         </div>
         <p class="controls" data-i18n="menu.controls">Swipe or use ← → to change lane</p>
@@ -51,13 +57,13 @@
         <div class="result"><span data-i18n="over.score">SCORE</span><strong id="final-score">0</strong></div>
         <div class="result-row">
           <span><span data-i18n="over.distance">Distance</span> <b id="final-distance">0m</b></span>
-          <span><span data-i18n="over.mice">Mice</span> <b id="final-mice">0</b></span>
+          <span><span data-i18n="over.mice">Pugs</span> <b id="final-mice">0</b></span>
         </div>
         <button id="restart" class="sun-button" type="button" data-i18n="over.retry">TRY AGAIN</button>
       </section>
 
       <button id="sound" type="button" aria-label="Toggle sound">♪</button>
       <div id="toast" role="status"></div>
-    </main>
+    </main>
   </body>
 </html>
