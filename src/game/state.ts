@@ -86,6 +86,7 @@ export const game = {
   invulnerableUntil: 0,
   swipeStartX: 0,
   environmentIndex: 0,
+  transitionTargetIndex: undefined as number | undefined,
   transitionTilesRemaining: 0,
   environmentTransition: undefined as EnvironmentTransition | undefined,
   pendingThemeApply: undefined as EnvironmentTheme["id"] | undefined,

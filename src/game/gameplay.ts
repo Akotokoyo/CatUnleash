@@ -33,12 +33,13 @@ import {
 } from "./state";
 import type { RunnerObject } from "./types";
 import {
-  beginEnvironmentTransition,
   canSpawnWaves,
   moveWorld,
   resize,
+  scheduleEnvironmentTransition,
   setEnvironment,
   tryApplyThemeAtWorldLine,
+  tryStartEnvironmentVisualTransition,
   updateEnvironmentTransition,
 } from "./world";
 
@@ -89,6 +90,7 @@ export function startRunFromZero(): void {
   game.pendingThemeApply = undefined;
   game.pendingLevelToast = undefined;
   game.postTransitionSpawnReady = false;
+  game.transitionTargetIndex = undefined;
   setEnvironment(0);
   rebuildPack();
   playerRoot.position.x = game.targetX;
@@ -162,7 +164,7 @@ function collect(object: RunnerObject): boolean {
 
   if (game.catCount > object.strength) {
     game.catCount -= 1;
-    rebuildPack();
+    requestAnimationFrame(() => rebuildPack());
     if (game.catCount <= 0) {
       game.catCount = 0;
       endRun();
@@ -252,14 +254,15 @@ export function update(): void {
       game.nextSpawn = THREE.MathUtils.randFloat(21, 29);
       spawnWave();
     }
+    tryStartEnvironmentVisualTransition();
     tryApplyThemeAtWorldLine();
     const nextLevel = Math.floor(game.distance / 250) + 1;
     if (nextLevel > game.level) {
       game.level = nextLevel;
-      beginEnvironmentTransition(game.level - 1);
+      scheduleEnvironmentTransition(game.level - 1);
       game.pendingLevelToast = {
         level: game.level,
-        worldKey: getEnvironment(game.environmentIndex).nameKey,
+        worldKey: getEnvironment(game.level - 1).nameKey,
       };
     }
     ui.score.textContent = String(scoreValue());

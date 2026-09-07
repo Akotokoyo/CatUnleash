@@ -117,12 +117,12 @@ body.loading #app {
 
 .fly-icon-pug {
   background: url("/assets/pugs/carlino_meme.png") center / contain no-repeat;
-  filter: drop-shadow(0 0 14px #ffb04ecc) drop-shadow(0 4px 10px #0007);
+  filter: drop-shadow(0 4px 8px #0006);
 }
 
 .fly-icon-tuna {
   background: center / contain no-repeat;
-  filter: drop-shadow(0 0 14px #ffd36acc) drop-shadow(0 4px 10px #0007);
+  filter: drop-shadow(0 4px 8px #0006);
 }
 
 .fly-trail {
@@ -134,17 +134,15 @@ body.loading #app {
 }
 
 .fly-trail-pug {
-  width: 18px;
-  height: 18px;
-  background: radial-gradient(circle, #ffe2b8 0%, #ff9f4a99 42%, transparent 72%);
-  box-shadow: 0 0 12px #ffb04a99;
+  width: 14px;
+  height: 14px;
+  background: #ff9f4a99;
 }
 
 .fly-trail-tuna {
-  width: 16px;
-  height: 16px;
-  background: radial-gradient(circle, #fff0b0 0%, #ffcf6799 42%, transparent 72%);
-  box-shadow: 0 0 12px #ffcf6799;
+  width: 12px;
+  height: 12px;
+  background: #ffcf6799;
 }
 
 .fly-burst {
@@ -156,17 +154,15 @@ body.loading #app {
 }
 
 .fly-burst-pug {
-  width: 10px;
-  height: 10px;
-  background: radial-gradient(circle, #fff1cc 0%, #ff9f4a 55%, transparent 100%);
-  box-shadow: 0 0 8px #ffb04acc;
+  width: 8px;
+  height: 8px;
+  background: #ff9f4a;
 }
 
 .fly-burst-tuna {
-  width: 9px;
-  height: 9px;
-  background: radial-gradient(circle, #fff6c8 0%, #ffcf67 55%, transparent 100%);
-  box-shadow: 0 0 8px #ffd36acc;
+  width: 8px;
+  height: 8px;
+  background: #ffcf67;
 }
 
 .fly-flash {
@@ -178,17 +174,15 @@ body.loading #app {
 }
 
 .fly-flash-pug {
-  width: 34px;
-  height: 34px;
-  background: radial-gradient(circle, #ffe8c488 0%, #ff9f4a55 45%, transparent 72%);
-  box-shadow: 0 0 22px #ffb04a88;
+  width: 28px;
+  height: 28px;
+  background: #ff9f4a66;
 }
 
 .fly-flash-tuna {
-  width: 32px;
-  height: 32px;
-  background: radial-gradient(circle, #fff3b088 0%, #ffcf6755 45%, transparent 72%);
-  box-shadow: 0 0 22px #ffd36a88;
+  width: 26px;
+  height: 26px;
+  background: #ffcf6766;
 }
 
 .fly-flash-level {

@@ -35,8 +35,13 @@ import {
 import { worldToScreen } from "./screen";
 import { disposeGroup, setGroupOpacity } from "./threeUtils";
 
+function transitionEnvironmentIndex(): number {
+  return game.transitionTargetIndex ?? game.environmentIndex;
+}
+
 export function setEnvironment(index: number): void {
   game.environmentIndex = index % ENVIRONMENTS.length;
+  game.transitionTargetIndex = undefined;
   game.environmentTransition = undefined;
   game.transitionTilesRemaining = 0;
   game.pendingThemeApply = undefined;
@@ -71,9 +76,20 @@ export function setEnvironment(index: number): void {
   applyThemeSprites(theme.id);
 }
 
-export function beginEnvironmentTransition(index: number): void {
+export function scheduleEnvironmentTransition(index: number): void {
   const nextIndex = index % ENVIRONMENTS.length;
-  if (nextIndex === game.environmentIndex) return;
+  if (nextIndex === game.environmentIndex && game.transitionTargetIndex === undefined) return;
+  if (game.transitionTargetIndex === nextIndex) return;
+  const theme = getEnvironment(nextIndex);
+  game.transitionTargetIndex = nextIndex;
+  game.pendingThemeApply = theme.id;
+  game.transitionTilesRemaining = ENVIRONMENT_TRANSITION_TILES;
+  game.postTransitionSpawnReady = true;
+}
+
+function startEnvironmentVisualTransition(): void {
+  const nextIndex = game.transitionTargetIndex;
+  if (nextIndex === undefined || game.environmentTransition) return;
   const theme = getEnvironment(nextIndex);
   const oldSky = skyRoot.children[0] as THREE.Group;
   const newSky = makeEnvironmentSky(nextIndex);
@@ -92,9 +108,13 @@ export function beginEnvironmentTransition(index: number): void {
     duration: ENVIRONMENT_TRANSITION_DURATION,
   };
   game.environmentIndex = nextIndex;
-  game.pendingThemeApply = theme.id;
-  game.transitionTilesRemaining = ENVIRONMENT_TRANSITION_TILES;
-  game.postTransitionSpawnReady = true;
+}
+
+export function tryStartEnvironmentVisualTransition(): void {
+  if (!game.transitionTargetIndex || game.environmentTransition) return;
+  const lineZ = getWorldChangeLineZ();
+  if (lineZ === undefined || lineZ < PLAYER_Z - TRACK_LENGTH) return;
+  startEnvironmentVisualTransition();
 }
 
 export function isEnvironmentTransitionActive(): boolean {
@@ -118,11 +138,13 @@ function getWorldChangeLineZ(): number | undefined {
 export function tryApplyThemeAtWorldLine(): void {
   if (!game.pendingThemeApply) return;
   const lineZ = getWorldChangeLineZ();
-  const crossed = lineZ !== undefined && lineZ >= PLAYER_Z;
-  if (!crossed && game.transitionTilesRemaining > 0) return;
+  if (lineZ === undefined || lineZ < PLAYER_Z) return;
   const center = playerScreenCenter();
   applyThemeSprites(game.pendingThemeApply);
   game.pendingThemeApply = undefined;
+  if (game.transitionTilesRemaining <= 0) {
+    game.transitionTargetIndex = undefined;
+  }
   spawnLevelTransitionBurst(center.x, center.y);
   if (game.pendingLevelToast) {
     showToast(t("toast.level", {
@@ -180,8 +202,9 @@ export function moveWorld(travel: number): void {
       decorRoot.remove(decor);
       disposeGroup(tile);
       disposeGroup(decor);
-      const nextTile = makeEnvironmentTrack(game.environmentIndex, TRACK_LENGTH);
-      const nextDecor = makeEnvironmentDecor(game.environmentIndex, index);
+      const envIndex = transitionEnvironmentIndex();
+      const nextTile = makeEnvironmentTrack(envIndex, TRACK_LENGTH);
+      const nextDecor = makeEnvironmentDecor(envIndex, index);
       nextTile.userData.newTheme = true;
       nextDecor.userData.newTheme = true;
       nextTile.position.z = wrappedZ;

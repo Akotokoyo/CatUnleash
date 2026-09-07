@@ -51,8 +51,7 @@ export function hudStatElement(valueEl: HTMLElement): HTMLElement {
 export function pulseHudStat(valueEl: HTMLElement): void {
   const stat = hudStatElement(valueEl);
   stat.classList.remove("pulse");
-  void stat.offsetWidth;
-  stat.classList.add("pulse");
+  requestAnimationFrame(() => stat.classList.add("pulse"));
 }
 
 export function hudTargetCenter(el: HTMLElement): { x: number; y: number } {

@@ -18,6 +18,28 @@ const flyTrails: TrailParticle[] = [];
 const flyBursts: BurstParticle[] = [];
 const flyFlashes: FlashParticle[] = [];
 let tunaFlyImageUrl = "";
+const MAX_FLY_TRAILS = 18;
+const TRAIL_INTERVAL = 0.048;
+
+let flyLayoutCache: {
+  via: { x: number; y: number };
+  targets: Map<HTMLElement, { x: number; y: number }>;
+} | undefined;
+
+function flyViaPoint(): { x: number; y: number } {
+  if (!flyLayoutCache) flyLayoutCache = { via: screenFlyCenter(), targets: new Map() };
+  return flyLayoutCache.via;
+}
+
+function flyTargetPoint(targetEl: HTMLElement): { x: number; y: number } {
+  if (!flyLayoutCache) flyLayoutCache = { via: screenFlyCenter(), targets: new Map() };
+  let target = flyLayoutCache.targets.get(targetEl);
+  if (!target) {
+    target = hudTargetCenter(targetEl);
+    flyLayoutCache.targets.set(targetEl, target);
+  }
+  return target;
+}
 
 export function setTunaFlyImageUrl(url: string): void {
   tunaFlyImageUrl = url;
@@ -32,6 +54,7 @@ export function clearFlyFx(): void {
   flyTrails.length = 0;
   flyBursts.length = 0;
   flyFlashes.length = 0;
+  flyLayoutCache = undefined;
 }
 
 function easeOutQuad(t: number): number {
@@ -51,8 +74,8 @@ export function spawnFlyIcon(
   onComplete?: () => void,
 ): void {
   const from = worldToScreen(fromWorld);
-  const via = screenFlyCenter();
-  const to = hudTargetCenter(targetEl);
+  const via = flyViaPoint();
+  const to = flyTargetPoint(targetEl);
   const dist = Math.hypot(from.x - via.x, from.y - via.y) + Math.hypot(via.x - to.x, via.y - to.y);
   const arc = Math.min(180, dist * 0.22);
   const el = document.createElement("div");
@@ -60,7 +83,7 @@ export function spawnFlyIcon(
   if (kind === "tuna") el.style.backgroundImage = `url("${tunaFlyImageUrl}")`;
   setFlyTransform(el, from.x, from.y, 1.55, 1);
   flyLayer.appendChild(el);
-  spawnDepartureBurst(from.x, from.y, kind);
+  spawnPickupFlash(from.x, from.y, kind);
   flyParticles.push({
     el,
     kind,
@@ -82,6 +105,7 @@ export function spawnFlyIcon(
 }
 
 function spawnFlyTrail(x: number, y: number, kind: "pug" | "tuna"): void {
+  if (flyTrails.length >= MAX_FLY_TRAILS) return;
   const el = document.createElement("div");
   el.className = `fly-trail fly-trail-${kind}`;
   setFlyTransform(el, x, y, 1.4, 0.85);
@@ -160,14 +184,18 @@ export function spawnLevelTransitionBurst(x: number, y: number): void {
   }
 }
 
-function spawnLandingBurst(x: number, y: number, kind: "pug" | "tuna"): void {
+function spawnPickupFlash(x: number, y: number, kind: "pug" | "tuna"): void {
   const flash = document.createElement("div");
   flash.className = `fly-flash fly-flash-${kind}`;
-  setFlyTransform(flash, x, y, 0.35, 0.9);
+  setFlyTransform(flash, x, y, 0.55, 0.95);
   flyLayer.appendChild(flash);
   flyFlashes.push({ el: flash, t: 0, duration: 0.34, x, y });
+}
 
-  const count = 12;
+function spawnLandingBurst(x: number, y: number, kind: "pug" | "tuna"): void {
+  spawnPickupFlash(x, y, kind);
+
+  const count = 6;
   for (let i = 0; i < count; i += 1) {
     const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.35;
     const speed = 52 + Math.random() * 62;
@@ -179,60 +207,6 @@ function spawnLandingBurst(x: number, y: number, kind: "pug" | "tuna"): void {
       el,
       t: 0,
       duration: 0.38 + Math.random() * 0.14,
-      x,
-      y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-    });
-  }
-}
-
-function spawnDepartureBurst(x: number, y: number, kind: "pug" | "tuna"): void {
-  const flash = document.createElement("div");
-  flash.className = `fly-flash fly-flash-${kind}`;
-  setFlyTransform(flash, x, y, 0.55, 0.95);
-  flyLayer.appendChild(flash);
-  flyFlashes.push({ el: flash, t: 0, duration: 0.42, x, y });
-
-  const count = 16;
-  for (let i = 0; i < count; i += 1) {
-    const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.3;
-    const speed = 68 + Math.random() * 78;
-    const el = document.createElement("div");
-    el.className = `fly-burst fly-burst-${kind}`;
-    setFlyTransform(el, x, y, 1.1, 1);
-    flyLayer.appendChild(el);
-    flyBursts.push({
-      el,
-      t: 0,
-      duration: 0.42 + Math.random() * 0.16,
-      x,
-      y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-    });
-  }
-}
-
-function spawnCenterBurst(x: number, y: number, kind: "pug" | "tuna"): void {
-  const flash = document.createElement("div");
-  flash.className = `fly-flash fly-flash-${kind}`;
-  setFlyTransform(flash, x, y, 0.82, 1);
-  flyLayer.appendChild(flash);
-  flyFlashes.push({ el: flash, t: 0, duration: 0.48, x, y });
-
-  const count = 18;
-  for (let i = 0; i < count; i += 1) {
-    const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.25;
-    const speed = 84 + Math.random() * 96;
-    const el = document.createElement("div");
-    el.className = `fly-burst fly-burst-${kind}`;
-    setFlyTransform(el, x, y, 1.2, 1);
-    flyLayer.appendChild(el);
-    flyBursts.push({
-      el,
-      t: 0,
-      duration: 0.46 + Math.random() * 0.18,
       x,
       y,
       vx: Math.cos(angle) * speed,
@@ -271,13 +245,11 @@ function flyScaleAt(t: number, phaseSplit: number): number {
 }
 
 export function launchScaredFly(worldPos: import("three").Vector3, count: number): void {
-  for (let i = 0; i < count; i += 1) {
-    spawnFlyIcon(worldPos, ui.mice, "pug", 0, () => {
-      game.pugsScared += 1;
-      updateResourceHud();
-      pulseHudStat(ui.mice);
-    });
-  }
+  spawnFlyIcon(worldPos, ui.mice, "pug", 0, () => {
+    game.pugsScared += count;
+    updateResourceHud();
+    pulseHudStat(ui.mice);
+  });
 }
 
 export function applyTunaPickup(): void {
@@ -308,6 +280,8 @@ export function updateResourceHud(): void {
 }
 
 export function updateFlyParticles(delta: number): void {
+  flyLayoutCache = undefined;
+
   for (let i = flyTrails.length - 1; i >= 0; i -= 1) {
     const trail = flyTrails[i];
     trail.t += delta;
@@ -366,13 +340,9 @@ export function updateFlyParticles(delta: number): void {
       continue;
     }
     const t = easeOutQuad(localT);
-    if (!particle.centerBurstDone && localT >= particle.phaseSplit) {
-      particle.centerBurstDone = true;
-      spawnCenterBurst(particle.viaX, particle.viaY, particle.kind);
-    }
     const { x, y } = flyPositionAt(particle, t);
     particle.trailTimer += delta;
-    if (particle.trailTimer >= 0.022) {
+    if (particle.trailTimer >= TRAIL_INTERVAL) {
       particle.trailTimer = 0;
       spawnFlyTrail(x, y, particle.kind);
     }
