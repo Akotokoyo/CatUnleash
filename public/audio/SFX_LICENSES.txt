@@ -1,0 +1,11 @@
+cat-meow.ogg
+"Kitten Mew" by AntumDeluge
+License: CC0 1.0 Universal
+https://opengameart.org/content/kitten-mew
+
+dog-bark.ogg
+Original recording by KFerentchak
+License: CC0 1.0 Universal
+https://freesound.org/people/KFerentchak/sounds/235912/
+Redistributed from:
+https://github.com/skill-issue-corp/SISI

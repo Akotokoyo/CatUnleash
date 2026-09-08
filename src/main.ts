@@ -12,6 +12,7 @@ import { translate, type Language, type TranslationKey } from "./i18n";
 
 type RunState = "menu" | "running" | "gameover";
 type PickupType = "cat" | "tuna" | "dog" | "carrier";
+type AnimalKind = "cat" | "dog";
 
 interface RunnerObject {
   mesh: THREE.Group;
@@ -126,6 +127,7 @@ let invulnerableUntil = 0;
 let swipeStartX = 0;
 let toastTimer = 0;
 let environmentIndex = 0;
+let accessoryEnvironmentIndex = 0;
 let transitionTilesRemaining = 0;
 let environmentTransition: EnvironmentTransition | undefined;
 let language: Language = "en";
@@ -158,6 +160,7 @@ function applyLanguage(): void {
 
 function setEnvironment(index: number): void {
   environmentIndex = index % ENVIRONMENTS.length;
+  accessoryEnvironmentIndex = environmentIndex;
   environmentTransition = undefined;
   transitionTilesRemaining = 0;
   const theme = getEnvironment(environmentIndex);
@@ -178,6 +181,7 @@ function setEnvironment(index: number): void {
   for (let i = 0; i < TRACK_TILES; i += 1) {
     const tile = makeEnvironmentTrack(environmentIndex, TRACK_LENGTH);
     tile.position.z = PLAYER_Z - i * TRACK_LENGTH;
+    tile.userData.environmentIndex = environmentIndex;
     trackTiles.push(tile);
     trackRoot.add(tile);
 
@@ -298,11 +302,145 @@ function makeCat(color = 0xe48b31): THREE.Group {
   return cat;
 }
 
+function addAnimalAccessory(animal: THREE.Group, kind: AnimalKind, worldIndex: number): void {
+  const worldId = getEnvironment(worldIndex).id;
+  const accessory = new THREE.Group();
+  accessory.name = "world-accessory";
+  const headY = kind === "cat" ? 1.58 : 1.28;
+  const headZ = kind === "cat" ? -0.34 : -0.4;
+  const faceY = kind === "cat" ? 1.3 : 1.08;
+  const faceZ = kind === "cat" ? -0.75 : -0.74;
+  const size = kind === "cat" ? 1 : 0.86;
+
+  if (worldId === "city") {
+    const red = new THREE.MeshStandardMaterial({ color: 0xe94f47, roughness: 0.72 });
+    const crown = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.18 * size, 0.23 * size, 0.18 * size, 8),
+      red,
+    );
+    crown.position.set(0, headY + 0.22 * size, headZ);
+    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.28 * size, 0.04, 0.18 * size), red);
+    brim.position.set(0, headY + 0.13, headZ - 0.21 * size);
+    accessory.add(crown, brim);
+  } else if (worldId === "country") {
+    const straw = new THREE.MeshStandardMaterial({ color: 0xe3bd58, roughness: 0.92 });
+    const brim = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.43 * size, 0.43 * size, 0.055, 12),
+      straw,
+    );
+    brim.position.set(0, headY + 0.05, headZ);
+    const crown = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.21 * size, 0.27 * size, 0.28 * size, 10),
+      straw,
+    );
+    crown.position.set(0, headY + 0.2 * size, headZ);
+    accessory.add(brim, crown);
+  } else if (worldId === "jungle") {
+    const leaves = new THREE.MeshStandardMaterial({ color: 0x2fa65a, roughness: 0.86 });
+    for (let index = -2; index <= 2; index += 1) {
+      const leaf = new THREE.Mesh(
+        new THREE.ConeGeometry(0.09 * size, 0.38 * size, 5),
+        leaves,
+      );
+      leaf.position.set(index * 0.1 * size, headY + 0.22 * size + Math.abs(index) * 0.02, headZ);
+      leaf.rotation.z = index * -0.22;
+      accessory.add(leaf);
+    }
+  } else if (worldId === "lab") {
+    const helmetShell = new THREE.MeshStandardMaterial({
+      color: 0x263d59,
+      roughness: 0.38,
+      metalness: 0.28,
+    });
+    const visorMaterial = new THREE.MeshStandardMaterial({
+      color: 0x65e8f2,
+      emissive: 0x167e8e,
+      emissiveIntensity: 0.55,
+      transparent: true,
+      opacity: 0.68,
+      roughness: 0.12,
+    });
+    const helmet = new THREE.Mesh(
+      new THREE.SphereGeometry(0.43 * size, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.68),
+      helmetShell,
+    );
+    helmet.position.set(0, headY - 0.13 * size, headZ);
+    const visor = new THREE.Mesh(
+      new THREE.BoxGeometry(0.56 * size, 0.24 * size, 0.045),
+      visorMaterial,
+    );
+    visor.position.set(0, faceY + 0.01, faceZ - 0.025);
+    const chinGuard = new THREE.Mesh(
+      new THREE.BoxGeometry(0.48 * size, 0.075, 0.09),
+      helmetShell,
+    );
+    chinGuard.position.set(0, faceY - 0.2 * size, faceZ - 0.035);
+    accessory.add(helmet, visor, chinGuard);
+  } else if (worldId === "space") {
+    const glass = new THREE.MeshStandardMaterial({
+      color: 0xbbeeff,
+      transparent: true,
+      opacity: 0.25,
+      roughness: 0.1,
+      depthWrite: false,
+    });
+    const helmet = new THREE.Mesh(
+      new THREE.SphereGeometry((kind === "cat" ? 0.55 : 0.47), 12, 8),
+      glass,
+    );
+    helmet.position.set(0, kind === "cat" ? 1.31 : 1.06, headZ);
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry((kind === "cat" ? 0.42 : 0.36), 0.05, 7, 16),
+      cream,
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(0, kind === "cat" ? 0.98 : 0.78, headZ + 0.04);
+    const backpack = new THREE.Mesh(
+      new THREE.BoxGeometry(0.52 * size, 0.62 * size, 0.22),
+      cream,
+    );
+    backpack.position.set(0, kind === "cat" ? 0.78 : 0.6, 0.48);
+    accessory.add(helmet, ring, backpack);
+  } else if (worldId === "egypt") {
+    const blue = new THREE.MeshStandardMaterial({ color: 0x225fa8, roughness: 0.6 });
+    const crown = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.18 * size, 0.29 * size, 0.35 * size, 8),
+      gold,
+    );
+    crown.position.set(0, headY + 0.23 * size, headZ);
+    for (const x of [-0.31, 0.31]) {
+      const flap = new THREE.Mesh(new THREE.BoxGeometry(0.14 * size, 0.52 * size, 0.09), blue);
+      flap.position.set(x * size, headY - 0.2 * size, headZ);
+      flap.rotation.z = x < 0 ? -0.13 : 0.13;
+      accessory.add(flap);
+    }
+    accessory.add(crown);
+  } else {
+    const glow = new THREE.MeshStandardMaterial({
+      color: 0xff58db,
+      emissive: 0xff30cc,
+      emissiveIntensity: 1.1,
+    });
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.36 * size, 0.04, 7, 18), glow);
+    halo.rotation.x = Math.PI / 2;
+    halo.position.set(0, headY + 0.43 * size, headZ);
+    const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.1 * size), glow);
+    crystal.position.set(0, headY + 0.66 * size, headZ);
+    accessory.add(halo, crystal);
+  }
+
+  accessory.traverse((object) => {
+    if (object instanceof THREE.Mesh) object.castShadow = true;
+  });
+  animal.add(accessory);
+}
+
 function rebuildPack(): void {
   playerRoot.clear();
   const shown = Math.min(catCount, 7);
   for (let i = 0; i < shown; i += 1) {
     const cat = makeCat(CAT_COLORS[i % CAT_COLORS.length]);
+    addAnimalAccessory(cat, "cat", accessoryEnvironmentIndex);
     if (i === 0) {
       cat.scale.setScalar(1.12);
       cat.position.set(0, 0.28, 0);
@@ -325,6 +463,7 @@ function makeRecruitCat(): THREE.Group {
   const cat = makeCat(color);
   cat.rotation.y = Math.PI;
   cat.scale.setScalar(0.92);
+  addAnimalAccessory(cat, "cat", accessoryEnvironmentIndex);
   group.add(cat);
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(0.72, 0.065, 7, 20),
@@ -511,6 +650,7 @@ function makeDogPack(strength: number): THREE.Group {
     tail.position.set(0.35, 0.78, 0.52);
     tail.rotation.z = -0.82;
     dog.add(tail);
+    addAnimalAccessory(dog, "dog", accessoryEnvironmentIndex);
     dog.rotation.y = Math.PI;
     dog.position.set((i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.55, 0.08, Math.floor(i / 2) * 0.75);
     group.add(dog);
@@ -612,7 +752,6 @@ function startRun(): void {
 
 function endRun(): void {
   state = "gameover";
-  audio.hit();
   ui.hud.classList.add("hidden");
   ui.finalScore.textContent = String(scoreValue());
   ui.finalDistance.textContent = `${Math.floor(distance)}m`;
@@ -744,6 +883,7 @@ function moveWorld(travel: number): void {
       const nextTile = makeEnvironmentTrack(environmentIndex, TRACK_LENGTH);
       const nextDecor = makeEnvironmentDecor(environmentIndex, index);
       nextTile.position.z = wrappedZ;
+      nextTile.userData.environmentIndex = environmentIndex;
       nextDecor.position.z = wrappedZ;
       trackTiles[index] = nextTile;
       decorTiles[index] = nextDecor;
@@ -755,10 +895,26 @@ function moveWorld(travel: number): void {
       decor.position.z = wrappedZ;
     }
   }
+  syncAccessoriesWithCurrentTrack();
   const theme = getEnvironment(environmentIndex);
   const baseIntensity = theme.id === "space" || theme.id === "dimension" ? 1.8 : 2.9;
   sun.intensity = baseIntensity + Math.sin(elapsed * 0.35) * 0.2;
   decorRoot.rotation.z = Math.sin(elapsed * 0.18) * 0.0015;
+}
+
+function syncAccessoriesWithCurrentTrack(): void {
+  let currentTile: THREE.Group | undefined;
+  let closestDistance = Number.POSITIVE_INFINITY;
+  for (const tile of trackTiles) {
+    const tileDistance = Math.abs(tile.position.z - PLAYER_Z);
+    if (tileDistance >= closestDistance) continue;
+    closestDistance = tileDistance;
+    currentTile = tile;
+  }
+  const currentEnvironment = currentTile?.userData.environmentIndex;
+  if (typeof currentEnvironment !== "number" || currentEnvironment === accessoryEnvironmentIndex) return;
+  accessoryEnvironmentIndex = currentEnvironment;
+  rebuildPack();
 }
 
 function updatePack(delta: number): void {
@@ -802,7 +958,7 @@ function collect(object: RunnerObject): void {
     catCount += 1;
     killScore += 25;
     rebuildPack();
-    audio.pickup(true);
+    audio.meow();
     showToast(t("toast.cat"));
     return;
   }
@@ -822,11 +978,13 @@ function collect(object: RunnerObject): void {
     return;
   }
   if (object.type === "carrier") {
+    audio.gameOver();
     showToast(t("toast.carrier"));
     loseLife();
     return;
   }
 
+  audio.bark();
   if (catCount > object.strength) {
     catCount -= object.strength;
     dogsDefeated += object.strength;

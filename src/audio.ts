@@ -3,6 +3,8 @@ export class CityAudio {
   private master?: GainNode;
   private sfxBus?: GainNode;
   private music?: HTMLAudioElement;
+  private samples = new Map<string, AudioBuffer>();
+  private loadingSamples = new Set<string>();
   private muted = false;
 
   start(): void {
@@ -14,6 +16,8 @@ export class CityAudio {
       this.sfxBus.gain.value = 1;
       this.sfxBus.connect(this.master);
       this.master.connect(this.context.destination);
+      void this.loadSample("meow", `${import.meta.env.BASE_URL}audio/cat-meow.ogg`);
+      void this.loadSample("bark", `${import.meta.env.BASE_URL}audio/dog-bark.ogg`);
     }
     void this.context.resume();
     if (!this.music) {
@@ -40,6 +44,23 @@ export class CityAudio {
     window.setTimeout(() => this.tone(high ? 1175 : 660, 0.1, "triangle", 0.1), 55);
   }
 
+  meow(): void {
+    this.playSample("meow");
+  }
+
+  bark(): void {
+    this.playSample("bark");
+  }
+
+  gameOver(): void {
+    [392, 330, 262, 196].forEach((frequency, index) => {
+      window.setTimeout(
+        () => this.tone(frequency, index === 3 ? 0.38 : 0.18, "triangle", 0.17, frequency * 0.82),
+        index * 145,
+      );
+    });
+  }
+
   hit(): void {
     this.tone(95, 0.22, "sawtooth", 0.22, 45);
   }
@@ -48,6 +69,32 @@ export class CityAudio {
     [440, 554, 659, 880].forEach((frequency, index) => {
       window.setTimeout(() => this.tone(frequency, 0.16, "triangle", 0.13), index * 70);
     });
+  }
+
+  private async loadSample(name: string, path: string): Promise<void> {
+    if (!this.context || this.samples.has(name) || this.loadingSamples.has(name)) return;
+    this.loadingSamples.add(name);
+    try {
+      const response = await fetch(path);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const buffer = await response.arrayBuffer();
+      this.samples.set(name, await this.context.decodeAudioData(buffer));
+    } catch (error) {
+      console.warn(`Impossibile caricare l'effetto audio ${name}.`, error);
+    } finally {
+      this.loadingSamples.delete(name);
+    }
+  }
+
+  private playSample(name: string): void {
+    const buffer = this.samples.get(name);
+    if (!this.context || !this.sfxBus || !buffer || this.muted) return;
+    const source = this.context.createBufferSource();
+    const gain = this.context.createGain();
+    source.buffer = buffer;
+    gain.gain.value = 1;
+    source.connect(gain).connect(this.sfxBus);
+    source.start();
   }
 
   private tone(
