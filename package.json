@@ -19,6 +19,7 @@
   "type": "module",
   "dependencies": {
     "@capacitor/android": "^8.5.1",
+    "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.1",
     "three": "^0.185.1"
   },

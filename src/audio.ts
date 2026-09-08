@@ -39,6 +39,18 @@ export class CityAudio {
     return this.muted;
   }
 
+  pause(): void {
+    this.music?.pause();
+    if (this.context?.state === "running") void this.context.suspend();
+  }
+
+  resume(): void {
+    if (!this.context || !this.music) return;
+    void this.context.resume();
+    this.music.muted = this.muted;
+    void this.music.play();
+  }
+
   pickup(high = false): void {
     this.tone(high ? 880 : 520, 0.08, "sine", 0.14);
     window.setTimeout(() => this.tone(high ? 1175 : 660, 0.1, "triangle", 0.1), 55);

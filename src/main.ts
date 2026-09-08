@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { App } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
 import "./style.css";
 import { CityAudio } from "./audio";
 import {
@@ -44,8 +46,13 @@ const gold = new THREE.MeshStandardMaterial({ color: 0xe8b83f, roughness: 0.42, 
 const terracotta = new THREE.MeshStandardMaterial({ color: 0xac4f2d, roughness: 0.82 });
 const cream = new THREE.MeshStandardMaterial({ color: 0xf7e3a6, roughness: 0.72 });
 const obsidian = new THREE.MeshStandardMaterial({ color: 0x13201e, roughness: 0.35, metalness: 0.25 });
+const sharedMaterials = new Set<THREE.Material>([gold, terracotta, cream, obsidian]);
 
 const canvas = mustElement<HTMLCanvasElement>("game");
+const mobileRendering =
+  /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+  window.matchMedia("(pointer: coarse)").matches;
+const maxPixelRatio = mobileRendering ? 1.5 : 2;
 
 const ui = {
   menu: mustElement("menu"),
@@ -53,6 +60,7 @@ const ui = {
   hud: mustElement("hud"),
   play: mustElement<HTMLButtonElement>("play"),
   restart: mustElement<HTMLButtonElement>("restart"),
+  backMenu: mustElement<HTMLButtonElement>("back-menu"),
   sound: mustElement<HTMLButtonElement>("sound"),
   language: mustElement<HTMLSelectElement>("language"),
   score: mustElement("score"),
@@ -63,12 +71,17 @@ const ui = {
   finalScore: mustElement("final-score"),
   finalDistance: mustElement("final-distance"),
   finalDogs: mustElement("final-dogs"),
+  collectFx: mustElement("collect-fx"),
   toast: mustElement("toast"),
 };
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: !mobileRendering,
+  powerPreference: "high-performance",
+});
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.type = mobileRendering ? THREE.BasicShadowMap : THREE.PCFShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
@@ -84,7 +97,7 @@ camera.lookAt(0, 1.2, -10);
 const sun = new THREE.DirectionalLight(0xffe7a1, 3.1);
 sun.position.set(-12, 22, 8);
 sun.castShadow = true;
-sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.mapSize.set(mobileRendering ? 512 : 1024, mobileRendering ? 512 : 1024);
 sun.shadow.camera.left = -18;
 sun.shadow.camera.right = 18;
 sun.shadow.camera.top = 22;
@@ -136,6 +149,7 @@ setEnvironment(0);
 rebuildPack();
 applyLanguage();
 bindControls();
+bindAppLifecycle();
 resize();
 renderer.setAnimationLoop(update);
 
@@ -261,6 +275,25 @@ function disposeGroup(group: THREE.Group): void {
     object.geometry.dispose();
     const materials = Array.isArray(object.material) ? object.material : [object.material];
     for (const item of materials) item.dispose();
+  });
+}
+
+function disposeRuntimeObject(root: THREE.Object3D): void {
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
+  root.traverse((object) => {
+    if (object instanceof THREE.Mesh && !geometries.has(object.geometry)) {
+      geometries.add(object.geometry);
+      object.geometry.dispose();
+    }
+    if (!(object instanceof THREE.Mesh || object instanceof THREE.Sprite)) return;
+    const objectMaterials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of objectMaterials) {
+      if (sharedMaterials.has(material) || materials.has(material)) continue;
+      materials.add(material);
+      if (material instanceof THREE.SpriteMaterial) material.map?.dispose();
+      material.dispose();
+    }
   });
 }
 
@@ -436,6 +469,7 @@ function addAnimalAccessory(animal: THREE.Group, kind: AnimalKind, worldIndex: n
 }
 
 function rebuildPack(): void {
+  for (const child of playerRoot.children) disposeRuntimeObject(child);
   playerRoot.clear();
   const shown = Math.min(catCount, 7);
   for (let i = 0; i < shown; i += 1) {
@@ -759,13 +793,39 @@ function endRun(): void {
   ui.gameover.classList.remove("hidden");
 }
 
+function returnToMenu(): void {
+  state = "menu";
+  clearObjects();
+  setEnvironment(0);
+  catCount = 1;
+  laneIndex = 1;
+  targetX = LANES[laneIndex];
+  playerRoot.position.x = targetX;
+  rebuildPack();
+  updateResourceHud();
+  ui.hud.classList.add("hidden");
+  ui.gameover.classList.add("hidden");
+  ui.menu.classList.remove("hidden");
+  audio.pause();
+}
+
 function scoreValue(): number {
   return Math.floor(distance * 10 + killScore);
 }
 
 function clearObjects(): void {
-  for (const object of objects) objectRoot.remove(object.mesh);
+  for (const object of objects) {
+    objectRoot.remove(object.mesh);
+    disposeRuntimeObject(object.mesh);
+  }
   objects.length = 0;
+}
+
+function removeRunnerObject(index: number): void {
+  const object = objects[index];
+  objectRoot.remove(object.mesh);
+  disposeRuntimeObject(object.mesh);
+  objects.splice(index, 1);
 }
 
 function shiftLane(direction: number): void {
@@ -777,6 +837,7 @@ function shiftLane(direction: number): void {
 function bindControls(): void {
   ui.play.addEventListener("click", startRun);
   ui.restart.addEventListener("click", startRun);
+  ui.backMenu.addEventListener("click", returnToMenu);
   ui.language.addEventListener("change", () => {
     language = ui.language.value as Language;
     applyLanguage();
@@ -802,10 +863,28 @@ function bindControls(): void {
   new ResizeObserver(resize).observe(canvas);
 }
 
+function bindAppLifecycle(): void {
+  const updateAudioState = (isActive: boolean): void => {
+    if (!isActive) {
+      audio.pause();
+    } else if (state === "running") {
+      audio.resume();
+    }
+  };
+  document.addEventListener("visibilitychange", () => {
+    updateAudioState(document.visibilityState === "visible");
+  });
+  window.addEventListener("pagehide", () => updateAudioState(false));
+  window.addEventListener("pageshow", () => updateAudioState(true));
+  if (Capacitor.isNativePlatform()) {
+    void App.addListener("appStateChange", ({ isActive }) => updateAudioState(isActive));
+  }
+}
+
 function resize(): void {
   const width = Math.max(1, canvas.clientWidth);
   const height = Math.max(1, canvas.clientHeight);
-  const pixelRatio = Math.min(Math.max(window.devicePixelRatio, 2), 3);
+  const pixelRatio = Math.min(Math.max(window.devicePixelRatio || 1, 1), maxPixelRatio);
   const targetWidth = Math.floor(width * pixelRatio);
   const targetHeight = Math.floor(height * pixelRatio);
   if (
@@ -823,7 +902,6 @@ function resize(): void {
 }
 
 function update(): void {
-  resize();
   timer.update();
   const delta = Math.min(timer.getDelta(), 0.05);
   elapsed += delta;
@@ -940,26 +1018,24 @@ function updateObjects(travel: number, delta: number): void {
       Math.abs(object.mesh.position.z - PLAYER_Z) < 1.25 ||
       (previousZ < PLAYER_Z && object.mesh.position.z > PLAYER_Z);
     if (closeZ && object.lane === laneIndex && runTime < invulnerableUntil) {
-      objectRoot.remove(object.mesh);
-      objects.splice(i, 1);
+      removeRunnerObject(i);
     } else if (closeZ && object.lane === laneIndex) {
       collect(object);
-      objectRoot.remove(object.mesh);
-      objects.splice(i, 1);
+      removeRunnerObject(i);
     } else if (object.mesh.position.z > PLAYER_Z + 9) {
-      objectRoot.remove(object.mesh);
-      objects.splice(i, 1);
+      removeRunnerObject(i);
     }
   }
 }
 
 function collect(object: RunnerObject): void {
+  spawnScreenSparkles(object.type);
   if (object.type === "cat") {
     catCount += 1;
     killScore += 25;
     rebuildPack();
     audio.meow();
-    showToast(t("toast.cat"));
+    showToast(t("toast.cat"), "cat");
     return;
   }
   if (object.type === "tuna") {
@@ -970,16 +1046,16 @@ function collect(object: RunnerObject): void {
       tunaCount -= 20;
       extraLives += 1;
       audio.victory();
-      showToast(t("toast.life"));
+      showToast(t("toast.life"), "tuna");
     } else {
-      showToast(t("toast.tuna", { count: tunaCount }));
+      showToast(t("toast.tuna", { count: tunaCount }), "tuna");
     }
     updateResourceHud();
     return;
   }
   if (object.type === "carrier") {
     audio.gameOver();
-    showToast(t("toast.carrier"));
+    showToast(t("toast.carrier"), "carrier");
     loseLife();
     return;
   }
@@ -991,7 +1067,7 @@ function collect(object: RunnerObject): void {
     killScore += object.strength * 85;
     rebuildPack();
     audio.victory();
-    showToast(t("toast.battle", { score: object.strength * 85, cats: object.strength }));
+    showToast(t("toast.battle", { score: object.strength * 85, cats: object.strength }), "dog");
   } else {
     loseLife();
   }
@@ -1018,9 +1094,35 @@ function updateResourceHud(): void {
   ui.lives.textContent = String(extraLives);
 }
 
-function showToast(message: string): void {
+function spawnScreenSparkles(type: PickupType): void {
+  const burst = document.createElement("div");
+  burst.className = `collect-burst ${type}`;
+  const flash = document.createElement("div");
+  flash.className = "collect-flash";
+  burst.append(flash);
+  const sparkleCount = mobileRendering
+    ? (type === "carrier" ? 16 : 12)
+    : (type === "carrier" ? 28 : 22);
+  for (let index = 0; index < sparkleCount; index += 1) {
+    const sparkle = document.createElement("i");
+    sparkle.style.setProperty("--angle", `${(360 / sparkleCount) * index + Math.random() * 12}deg`);
+    sparkle.style.setProperty("--distance", `${THREE.MathUtils.randInt(90, type === "carrier" ? 270 : 220)}px`);
+    sparkle.style.setProperty("--delay", `${Math.random() * 90}ms`);
+    sparkle.style.setProperty("--size", `${THREE.MathUtils.randInt(5, 14)}px`);
+    burst.append(sparkle);
+  }
+  ui.collectFx.append(burst);
+  window.setTimeout(() => burst.remove(), 1000);
+}
+
+function showToast(message: string, effectType?: PickupType): void {
   ui.toast.textContent = message;
+  ui.toast.className = "";
+  void ui.toast.offsetWidth;
+  if (effectType) ui.toast.classList.add("collect-message", effectType);
   ui.toast.classList.add("show");
   window.clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => ui.toast.classList.remove("show"), 900);
+  toastTimer = window.setTimeout(() => {
+    ui.toast.className = "";
+  }, effectType ? 950 : 900);
 }

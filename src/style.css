@@ -155,6 +155,20 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 
 .sun-button:active { transform: translateY(4px); box-shadow: inset 0 0 0 3px #fff0a2, 0 2px 0 #7e4318; }
 
+.menu-button {
+  display: block;
+  margin: 16px auto 0;
+  padding: 7px 18px;
+  color: #b7ded1;
+  font: 800 15px "Baloo 2", sans-serif;
+  border: 1px solid #57917f;
+  border-radius: 20px;
+  background: #082725d9;
+  cursor: pointer;
+}
+
+.menu-button:active { transform: translateY(2px); }
+
 .instructions {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -196,6 +210,54 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
   cursor: pointer;
 }
 
+#collect-fx {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.collect-burst {
+  --fx-color: #fff;
+  position: absolute;
+  inset: 0;
+  color: var(--fx-color);
+}
+
+.collect-burst.cat { --fx-color: #6effc5; }
+.collect-burst.tuna { --fx-color: #ffd85d; }
+.collect-burst.dog { --fx-color: #ff795f; }
+.collect-burst.carrier { --fx-color: #ff3f63; }
+
+.collect-flash {
+  position: absolute;
+  inset: -20%;
+  background: radial-gradient(circle at 50% 43%, currentColor 0, transparent 58%);
+  animation: collect-flash .72s ease-out both;
+}
+
+.collect-burst i {
+  position: absolute;
+  top: 43%;
+  left: 50%;
+  width: var(--size);
+  height: calc(var(--size) * .28);
+  border-radius: 99px;
+  background: #fff;
+  box-shadow: 0 0 5px #fff, 0 0 16px currentColor;
+  animation: sparkle-burst .82s var(--delay) cubic-bezier(.1, .65, .25, 1) both;
+}
+
+.collect-burst i::after {
+  position: absolute;
+  inset: -135% 36%;
+  border-radius: inherit;
+  background: inherit;
+  box-shadow: inherit;
+  content: "";
+}
+
 #toast {
   position: absolute;
   z-index: 7;
@@ -212,6 +274,53 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 }
 
 #toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+
+#toast.collect-message {
+  top: 35%;
+  width: 94%;
+  color: #fff;
+  font-size: clamp(48px, 13vw, 88px);
+  line-height: .92;
+  letter-spacing: -.035em;
+  -webkit-text-stroke: 2px #15312b;
+  text-shadow:
+    0 5px 0 #15312b,
+    0 9px 20px #000c,
+    0 0 20px currentColor;
+  transition: none;
+  animation: collect-message .92s cubic-bezier(.16, .8, .24, 1) both;
+}
+
+#toast.collect-message.cat { color: #83ffd1; }
+#toast.collect-message.tuna { color: #ffe273; }
+#toast.collect-message.dog { color: #ff8a72; }
+#toast.collect-message.carrier { color: #ff5875; }
+
+@keyframes collect-flash {
+  0% { opacity: 0; transform: scale(.35); }
+  18% { opacity: .42; }
+  100% { opacity: 0; transform: scale(1.18); }
+}
+
+@keyframes sparkle-burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateX(12px) scale(.1);
+  }
+  18% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateX(var(--distance)) scale(.25);
+  }
+}
+
+@keyframes collect-message {
+  0% { opacity: 0; transform: translate(-50%, 28px) scale(.25) rotate(-5deg); }
+  24% { opacity: 1; transform: translate(-50%, -8px) scale(1.18) rotate(2deg); }
+  48% { transform: translate(-50%, 0) scale(1) rotate(0); }
+  78% { opacity: 1; transform: translate(-50%, -5px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -38px) scale(.88); }
+}
 
 .result {
   margin: 16px auto;
