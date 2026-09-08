@@ -11,7 +11,7 @@ import {
 import { translate, type Language, type TranslationKey } from "./i18n";
 
 type RunState = "menu" | "running" | "gameover";
-type PickupType = "milk" | "tuna" | "mouse" | "obstacle";
+type PickupType = "cat" | "tuna" | "dog" | "carrier";
 
 interface RunnerObject {
   mesh: THREE.Group;
@@ -38,12 +38,11 @@ const LANES = [-2.7, 0, 2.7];
 const TRACK_LENGTH = 14;
 const TRACK_TILES = 10;
 const PLAYER_Z = 3;
-const jade = new THREE.MeshStandardMaterial({ color: 0x25a57e, roughness: 0.62, metalness: 0.08 });
+const CAT_COLORS = [0xe58a31, 0xf1d28a, 0x57514c, 0xc9613d, 0xe3e0d2];
 const gold = new THREE.MeshStandardMaterial({ color: 0xe8b83f, roughness: 0.42, metalness: 0.35 });
 const terracotta = new THREE.MeshStandardMaterial({ color: 0xac4f2d, roughness: 0.82 });
 const cream = new THREE.MeshStandardMaterial({ color: 0xf7e3a6, roughness: 0.72 });
 const obsidian = new THREE.MeshStandardMaterial({ color: 0x13201e, roughness: 0.35, metalness: 0.25 });
-const mouseMat = new THREE.MeshStandardMaterial({ color: 0x7b665c, roughness: 0.85 });
 
 const canvas = mustElement<HTMLCanvasElement>("game");
 
@@ -62,7 +61,7 @@ const ui = {
   lives: mustElement("lives"),
   finalScore: mustElement("final-score"),
   finalDistance: mustElement("final-distance"),
-  finalMice: mustElement("final-mice"),
+  finalDogs: mustElement("final-dogs"),
   toast: mustElement("toast"),
 };
 
@@ -114,7 +113,7 @@ let targetX = LANES[laneIndex];
 let catCount = 1;
 let distance = 0;
 let killScore = 0;
-let miceDefeated = 0;
+let dogsDefeated = 0;
 let tunaCount = 0;
 let extraLives = 0;
 let level = 1;
@@ -303,8 +302,7 @@ function rebuildPack(): void {
   playerRoot.clear();
   const shown = Math.min(catCount, 7);
   for (let i = 0; i < shown; i += 1) {
-    const palette = [0xe58a31, 0xf1d28a, 0x57514c, 0xc9613d, 0xe3e0d2];
-    const cat = makeCat(palette[i % palette.length]);
+    const cat = makeCat(CAT_COLORS[i % CAT_COLORS.length]);
     if (i === 0) {
       cat.scale.setScalar(1.12);
       cat.position.set(0, 0.28, 0);
@@ -321,21 +319,34 @@ function rebuildPack(): void {
   ui.cats.textContent = String(catCount);
 }
 
-function makeMilk(): THREE.Group {
+function makeRecruitCat(): THREE.Group {
   const group = new THREE.Group();
-  const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.38, 0.92, 12), cream);
-  bottle.position.y = 0.58;
-  bottle.castShadow = true;
-  group.add(bottle);
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 0.27, 12), cream);
-  neck.position.y = 1.15;
-  group.add(neck);
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.12, 12), gold);
-  cap.position.y = 1.34;
-  group.add(cap);
-  const glyph = new THREE.Mesh(new THREE.CircleGeometry(0.18, 12), jade);
-  glyph.position.set(0, 0.62, -0.37);
-  group.add(glyph);
+  const color = CAT_COLORS[Math.floor(Math.random() * CAT_COLORS.length)];
+  const cat = makeCat(color);
+  cat.rotation.y = Math.PI;
+  cat.scale.setScalar(0.92);
+  group.add(cat);
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.72, 0.065, 7, 20),
+    new THREE.MeshStandardMaterial({
+      color: 0x62f0b2,
+      emissive: 0x1d8f68,
+      emissiveIntensity: 0.7,
+    }),
+  );
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.1;
+  group.add(ring);
+  const plusMaterial = new THREE.MeshStandardMaterial({
+    color: 0x7dffc2,
+    emissive: 0x239c69,
+    emissiveIntensity: 0.75,
+  });
+  const plusVertical = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.58, 0.1), plusMaterial);
+  const plusHorizontal = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.13, 0.1), plusMaterial);
+  plusVertical.position.set(0, 1.95, 0);
+  plusHorizontal.position.copy(plusVertical.position);
+  group.add(plusVertical, plusHorizontal);
   return group;
 }
 
@@ -358,67 +369,159 @@ function makeTuna(): THREE.Group {
   return group;
 }
 
-function makeObstacle(): THREE.Group {
+function makeCarrier(): THREE.Group {
   const group = new THREE.Group();
-  const orange = new THREE.MeshStandardMaterial({ color: 0xf06a32, roughness: 0.68 });
-  const white = new THREE.MeshStandardMaterial({ color: 0xf4f1dc, roughness: 0.72 });
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.75, 0.38), orange);
-  bar.position.y = 1.15;
-  bar.castShadow = true;
-  group.add(bar);
-  for (const x of [-0.65, 0, 0.65]) {
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.77, 0.4), white);
-    stripe.position.set(x, 1.15, -0.02);
-    stripe.rotation.z = -0.35;
-    group.add(stripe);
+  const upperMaterial = new THREE.MeshStandardMaterial({ color: 0xdce5e5, roughness: 0.7, flatShading: true });
+  const lowerMaterial = new THREE.MeshStandardMaterial({ color: 0x4a5255, roughness: 0.78, flatShading: true });
+  const metal = new THREE.MeshStandardMaterial({ color: 0x252c2e, roughness: 0.38, metalness: 0.62 });
+  const gridMetal = new THREE.MeshStandardMaterial({ color: 0xd6dfdd, roughness: 0.28, metalness: 0.78 });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.72, 1.65), lowerMaterial);
+  base.position.y = 0.38;
+  base.castShadow = true;
+  group.add(base);
+
+  const shell = new THREE.Mesh(makeTaperedCarrierShell(), upperMaterial);
+  shell.position.y = 0.68;
+  shell.castShadow = true;
+  group.add(shell);
+  const topPanel = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.07, 0.92), upperMaterial);
+  topPanel.position.set(0, 1.73, 0.04);
+  group.add(topPanel);
+
+  const doorway = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.36, 1.22),
+    new THREE.MeshBasicMaterial({ color: 0x263235, side: THREE.DoubleSide }),
+  );
+  doorway.position.set(0, 1.08, 0.84);
+  group.add(doorway);
+  for (const x of [-0.6, -0.3, 0, 0.3, 0.6]) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.035, 1.22, 0.04), gridMetal);
+    bar.position.set(x, 1.08, 0.87);
+    group.add(bar);
   }
-  for (const x of [-0.82, 0.82]) {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.4, 0.22), obsidian);
-    leg.position.set(x, 0.58, 0);
-    group.add(leg);
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.18, 0.55), obsidian);
-    foot.position.set(x, 0.1, 0);
-    group.add(foot);
-    const beacon = new THREE.Mesh(
-      new THREE.SphereGeometry(0.14, 8, 6),
-      new THREE.MeshStandardMaterial({ color: 0xffd43b, emissive: 0xff8a00, emissiveIntensity: 1.6 }),
-    );
-    beacon.position.set(x, 1.68, 0);
-    group.add(beacon);
+  for (const y of [0.53, 0.8, 1.07, 1.34, 1.61]) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.035, 0.04), gridMetal);
+    bar.position.set(0, y, 0.875);
+    group.add(bar);
   }
+  for (const x of [-0.68, 0.68]) {
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.34, 0.07), gridMetal);
+    frame.position.set(x, 1.08, 0.89);
+    group.add(frame);
+  }
+  for (const y of [0.42, 1.74]) {
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(1.43, 0.07, 0.07), gridMetal);
+    frame.position.set(0, y, 0.89);
+    group.add(frame);
+  }
+  for (const x of [-0.72, 0.72]) {
+    for (const z of [-0.34, -0.1, 0.14, 0.38]) {
+      const vent = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.48, 0.075), metal);
+      vent.position.set(x, 1.28, z);
+      group.add(vent);
+    }
+  }
+
+  for (const x of [-0.28, 0.28]) {
+    const support = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.28, 0.1), metal);
+    support.position.set(x, 1.88, 0.05);
+    group.add(support);
+  }
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.1, 0.14), metal);
+  handle.position.set(0, 2.01, 0.05);
+  group.add(handle);
+  const latch = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.24, 0.12), gold);
+  latch.position.set(0.53, 1.08, 0.91);
+  group.add(latch);
+  group.scale.setScalar(0.9);
   return group;
 }
 
-function makeMousePack(strength: number): THREE.Group {
+function makeTaperedCarrierShell(): THREE.BufferGeometry {
+  const bottomWidth = 1.72;
+  const bottomDepth = 1.58;
+  const topWidth = 1.4;
+  const topDepth = 1.25;
+  const height = 1.04;
+  const positions = new Float32Array([
+    -bottomWidth / 2, 0, -bottomDepth / 2,
+    bottomWidth / 2, 0, -bottomDepth / 2,
+    bottomWidth / 2, 0, bottomDepth / 2,
+    -bottomWidth / 2, 0, bottomDepth / 2,
+    -topWidth / 2, height, -topDepth / 2,
+    topWidth / 2, height, -topDepth / 2,
+    topWidth / 2, height, topDepth / 2,
+    -topWidth / 2, height, topDepth / 2,
+  ]);
+  const indices = [
+    0, 2, 1, 0, 3, 2,
+    4, 5, 6, 4, 6, 7,
+    0, 1, 5, 0, 5, 4,
+    1, 2, 6, 1, 6, 5,
+    2, 3, 7, 2, 7, 6,
+    3, 0, 4, 3, 4, 7,
+  ];
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function makeDogPack(strength: number): THREE.Group {
   const group = new THREE.Group();
+  const dogColors = [0x9a6744, 0xd09a58, 0x5e514b, 0xc4785b, 0xe1c18d];
   for (let i = 0; i < Math.min(strength, 5); i += 1) {
-    const mouse = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 7), mouseMat);
-    body.scale.set(0.85, 0.75, 1.35);
-    body.position.y = 0.38;
+    const dog = new THREE.Group();
+    const fur = new THREE.MeshStandardMaterial({
+      color: dogColors[i % dogColors.length],
+      roughness: 0.85,
+    });
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.4, 11, 8), fur);
+    body.scale.set(0.9, 0.9, 1.35);
+    body.position.y = 0.58;
     body.castShadow = true;
-    mouse.add(body);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.23, 10, 7), mouseMat);
-    head.position.set(0, 0.52, -0.35);
-    mouse.add(head);
-    for (const x of [-0.17, 0.17]) {
-      const ear = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), terracotta);
-      ear.position.set(x, 0.71, -0.36);
-      mouse.add(ear);
+    dog.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 11, 8), fur);
+    head.position.set(0, 1.02, -0.42);
+    dog.add(head);
+    const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.17, 9, 7), cream);
+    muzzle.scale.set(1, 0.72, 1.2);
+    muzzle.position.set(0, 0.93, -0.69);
+    dog.add(muzzle);
+    for (const x of [-0.26, 0.26]) {
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.42, 5), fur);
+      ear.position.set(x, 1.27, -0.37);
+      ear.rotation.z = x < 0 ? 0.45 : -0.45;
+      dog.add(ear);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.038, 7, 5), obsidian);
+      eye.scale.z = 0.3;
+      eye.position.set(x * 0.5, 1.08, -0.735);
+      dog.add(eye);
+      for (const z of [-0.18, 0.32]) {
+        const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.34, 4, 7), fur);
+        leg.position.set(x, 0.25, z);
+        dog.add(leg);
+      }
     }
-    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.045, 7, 5), obsidian);
-    nose.position.set(0, 0.47, -0.58);
-    mouse.add(nose);
-    mouse.position.set((i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.45, 0.1, Math.floor(i / 2) * 0.6);
-    group.add(mouse);
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.065, 7, 5), obsidian);
+    nose.position.set(0, 0.96, -0.86);
+    dog.add(nose);
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.65, 7), fur);
+    tail.position.set(0.35, 0.78, 0.52);
+    tail.rotation.z = -0.82;
+    dog.add(tail);
+    dog.rotation.y = Math.PI;
+    dog.position.set((i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.55, 0.08, Math.floor(i / 2) * 0.75);
+    group.add(dog);
   }
-  const badge = makeBadge(strength);
-  badge.position.set(0, 1.55, 0);
+  const badge = makeBadge(`−${strength}`);
+  badge.position.set(0, 1.8, 0);
   group.add(badge);
   return group;
 }
 
-function makeBadge(value: number): THREE.Sprite {
+function makeBadge(value: string | number): THREE.Sprite {
   const badgeCanvas = document.createElement("canvas");
   badgeCanvas.width = badgeCanvas.height = 128;
   const context = badgeCanvas.getContext("2d");
@@ -444,31 +547,31 @@ function spawnWave(): void {
   const laneOrder = [0, 1, 2].sort(() => Math.random() - 0.5);
   const roll = Math.random();
   if (roll < 0.22) {
-    spawnObject("milk", laneOrder[0], 0);
-    spawnObject("mouse", laneOrder[1], randomStrength());
+    spawnObject("cat", laneOrder[0], 0);
+    spawnObject("dog", laneOrder[1], randomStrength());
   } else if (roll < 0.4) {
     spawnObject("tuna", laneOrder[0], 0);
-    spawnObject("mouse", laneOrder[1], randomStrength());
+    spawnObject("dog", laneOrder[1], randomStrength());
   } else if (roll < 0.72) {
-    spawnObject("mouse", laneOrder[0], randomStrength());
-    spawnObject("mouse", laneOrder[1], randomStrength());
+    spawnObject("dog", laneOrder[0], randomStrength());
+    spawnObject("dog", laneOrder[1], randomStrength());
   } else if (roll < 0.88) {
-    spawnObject("mouse", laneOrder[0], randomStrength());
+    spawnObject("dog", laneOrder[0], randomStrength());
   } else {
-    spawnObject("obstacle", laneOrder[0], 0);
-    spawnObject("mouse", laneOrder[1], randomStrength());
+    spawnObject("carrier", laneOrder[0], 0);
+    spawnObject("dog", laneOrder[1], randomStrength());
   }
 }
 
 function spawnObject(type: PickupType, lane: number, strength: number): void {
   const mesh =
-    type === "milk"
-      ? makeMilk()
+    type === "cat"
+      ? makeRecruitCat()
       : type === "tuna"
         ? makeTuna()
-        : type === "obstacle"
-          ? makeObstacle()
-          : makeMousePack(strength);
+        : type === "carrier"
+          ? makeCarrier()
+          : makeDogPack(strength);
   mesh.position.set(LANES[lane], 0.3, -86 - Math.random() * 4);
   objectRoot.add(mesh);
   objects.push({ mesh, type, lane, strength, phase: Math.random() * Math.PI * 2 });
@@ -487,7 +590,7 @@ function startRun(): void {
   catCount = 1;
   distance = 0;
   killScore = 0;
-  miceDefeated = 0;
+  dogsDefeated = 0;
   tunaCount = 0;
   extraLives = 0;
   level = 1;
@@ -513,7 +616,7 @@ function endRun(): void {
   ui.hud.classList.add("hidden");
   ui.finalScore.textContent = String(scoreValue());
   ui.finalDistance.textContent = `${Math.floor(distance)}m`;
-  ui.finalMice.textContent = String(miceDefeated);
+  ui.finalDogs.textContent = String(dogsDefeated);
   ui.gameover.classList.remove("hidden");
 }
 
@@ -674,9 +777,7 @@ function updateObjects(travel: number, delta: number): void {
     const object = objects[i];
     const previousZ = object.mesh.position.z;
     object.mesh.position.z += travel;
-    if (object.type !== "obstacle") {
-      object.mesh.rotation.y += delta * (object.type === "mouse" ? 1.2 : 2.2);
-    }
+    if (object.type === "tuna") object.mesh.rotation.y += delta * 2.2;
     object.mesh.position.y = 0.3 + Math.sin(elapsed * 3.2 + object.phase) * 0.12;
 
     const closeZ =
@@ -697,7 +798,7 @@ function updateObjects(travel: number, delta: number): void {
 }
 
 function collect(object: RunnerObject): void {
-  if (object.type === "milk") {
+  if (object.type === "cat") {
     catCount += 1;
     killScore += 25;
     rebuildPack();
@@ -720,15 +821,15 @@ function collect(object: RunnerObject): void {
     updateResourceHud();
     return;
   }
-  if (object.type === "obstacle") {
-    showToast(t("toast.barrier"));
+  if (object.type === "carrier") {
+    showToast(t("toast.carrier"));
     loseLife();
     return;
   }
 
   if (catCount > object.strength) {
     catCount -= object.strength;
-    miceDefeated += object.strength;
+    dogsDefeated += object.strength;
     killScore += object.strength * 85;
     rebuildPack();
     audio.victory();
