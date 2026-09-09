@@ -1,9 +1,8 @@
-import * as THREE from "three";
+import { rebuildBalloonSprite } from "./balloonSprite";
 import { rebuildPack } from "./cats";
 import { CAT_PICKUP_SPRITE_HEIGHT } from "./constants";
 import { syncPugPackMood } from "./objects";
 import { catFrontTextures, objects } from "./state";
-import { resizeTexturedPlane, setTexturedPlaneTexture } from "./threeUtils";
 
 export function refreshThemedSpritesInScene(): void {
   rebuildPack();
@@ -11,10 +10,8 @@ export function refreshThemedSpritesInScene(): void {
     if (object.type === "milk" && object.pickupCatId) {
       const texture = catFrontTextures[object.pickupCatId];
       if (!texture) continue;
-      const sprite = object.mesh.children[0];
-      if (!(sprite instanceof THREE.Mesh)) continue;
-      setTexturedPlaneTexture(sprite, texture);
-      resizeTexturedPlane(sprite, texture, CAT_PICKUP_SPRITE_HEIGHT);
+      rebuildBalloonSprite(object.mesh, texture, CAT_PICKUP_SPRITE_HEIGHT);
+      object.mesh.userData.pickupCatId = object.pickupCatId;
     }
     if (object.type === "mouse") {
       object.mesh.userData.pugMood = undefined;

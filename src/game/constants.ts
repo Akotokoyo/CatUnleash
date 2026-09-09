@@ -12,7 +12,7 @@ export const terracotta = new THREE.MeshStandardMaterial({ color: 0xac4f2d, roug
 export const cream = new THREE.MeshStandardMaterial({ color: 0xf7e3a6, roughness: 0.72 });
 export const obsidian = new THREE.MeshStandardMaterial({ color: 0x13201e, roughness: 0.35, metalness: 0.25 });
 
-export const SPRITE_SCALE = 1.8;
+export const SPRITE_SCALE = 1.6;
 
 export const MAX_PUG_STRENGTH = 3;
 export const PUG_SPRITE_HEIGHT = 1.725 * SPRITE_SCALE;

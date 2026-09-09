@@ -17,11 +17,10 @@ import type { PickupType, RunnerObject } from "./types";
 import { game, objectRoot, objects, textures } from "./state";
 import { nextWaveTick } from "./wavePatterns";
 import {
-  makeTexturedPlane,
-  resizeTexturedPlane,
-  setTexturedPlaneFlip,
-  setTexturedPlaneTexture,
-} from "./threeUtils";
+  makeBalloonSprite,
+  rebuildBalloonSprite,
+} from "./balloonSprite";
+import { makeTexturedPlane } from "./threeUtils";
 
 function makeTuna(): THREE.Group {
   const group = new THREE.Group();
@@ -75,33 +74,26 @@ function makeObstacle(): THREE.Group {
   return group;
 }
 
-function makePugSprite(texture: THREE.Texture, flipX: 1 | -1 = 1): THREE.Mesh {
-  const plane = makeTexturedPlane(texture, PUG_SPRITE_HEIGHT, flipX);
-  plane.userData.pugSprite = true;
-  return plane;
+function makePugSprite(texture: THREE.Texture, flipX: 1 | -1 = 1): THREE.Group {
+  const pug = makeBalloonSprite(texture, PUG_SPRITE_HEIGHT, flipX);
+  pug.userData.pugSprite = true;
+  return pug;
 }
 
-function setPugPackTexture(group: THREE.Group, texture: THREE.Texture): void {
+function rebuildPugPack(
+  group: THREE.Group,
+  texture: THREE.Texture,
+  height: number,
+  flipX: 1 | -1 = 1,
+): void {
+  const pugs: THREE.Group[] = [];
   group.traverse((child) => {
-    if (!(child instanceof THREE.Mesh) || !child.userData.pugSprite) return;
-    setTexturedPlaneTexture(child, texture);
+    if (child instanceof THREE.Group && child.userData.pugSprite) pugs.push(child);
   });
-}
-
-function setPugPackFlip(group: THREE.Group, flipX: 1 | -1): void {
-  group.traverse((child) => {
-    if (!(child instanceof THREE.Mesh) || !child.userData.pugSprite) return;
-    setTexturedPlaneFlip(child, flipX);
-  });
-}
-
-function setPugPackScale(group: THREE.Group, height: number): void {
-  group.traverse((child) => {
-    if (!(child instanceof THREE.Mesh) || !child.userData.pugSprite) return;
-    const texture = (child.material as THREE.MeshBasicMaterial).map;
-    if (!texture) return;
-    resizeTexturedPlane(child, texture, height);
-  });
+  for (const pug of pugs) {
+    rebuildBalloonSprite(pug, texture, height, flipX);
+    pug.userData.pugSprite = true;
+  }
 }
 
 function makeMousePack(strength: number): THREE.Group {
@@ -109,8 +101,7 @@ function makeMousePack(strength: number): THREE.Group {
   const count = Math.min(strength, MAX_PUG_STRENGTH);
   for (let i = 0; i < count; i += 1) {
     const pug = makePugSprite(textures.pugIdle!);
-    pug.userData.pugSprite = true;
-    pug.position.set((i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.55, 0.55, Math.floor(i / 2) * 0.65);
+    pug.position.set((i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.55, 0, Math.floor(i / 2) * 0.65);
     group.add(pug);
   }
   return group;
@@ -126,12 +117,12 @@ export function syncPugPackMood(object: RunnerObject): void {
   if (object.mesh.userData.pugMood === mood) return;
   object.mesh.userData.pugMood = mood;
   const bark = mood === "bark";
-  setPugPackTexture(object.mesh, bark ? textures.pugBark! : textures.pugIdle!);
-  setPugPackScale(
+  rebuildPugPack(
     object.mesh,
+    bark ? textures.pugBark! : textures.pugIdle!,
     PUG_SPRITE_HEIGHT * (bark ? PUG_BARK_SPRITE_SCALE : PUG_IDLE_SPRITE_SCALE),
+    1,
   );
-  setPugPackFlip(object.mesh, 1);
 }
 
 export function spawnWave(): void {

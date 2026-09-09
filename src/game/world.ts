@@ -14,7 +14,7 @@ import {
   TRACK_TILES,
 } from "./constants";
 import { canvas, showToast } from "./dom";
-import { spawnLevelTransitionBurst } from "./flyFx";
+import { spawnLevelTransitionBurst, syncFlyOverlaySize } from "./flyFx";
 import { t } from "./locale";
 import { applyThemeSprites } from "./sprites";
 import {
@@ -231,6 +231,7 @@ export function resize(): void {
   const pixelRatio = Math.min(Math.max(window.devicePixelRatio, 2), 3);
   const targetWidth = Math.floor(width * pixelRatio);
   const targetHeight = Math.floor(height * pixelRatio);
+  syncFlyOverlaySize();
   if (
     canvas.width === targetWidth &&
     canvas.height === targetHeight &&

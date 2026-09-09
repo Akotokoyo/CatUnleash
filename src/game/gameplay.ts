@@ -19,6 +19,7 @@ import {
   applyTunaPickup,
   clearFlyFx,
   launchScaredFly,
+  renderFlyOverlay,
   spawnFlyIcon,
   updateFlyParticles,
   updateResourceHud,
@@ -322,4 +323,5 @@ export function update(): void {
 
   camera.position.x += (playerRoot.position.x * 0.16 - camera.position.x) * Math.min(1, delta * 2.8);
   renderer.render(scene, camera);
+  renderFlyOverlay();
 }

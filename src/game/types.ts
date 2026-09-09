@@ -44,7 +44,7 @@ export interface EnvironmentTransition {
 }
 
 export interface FlyParticle {
-  el: HTMLDivElement;
+  sprite: import("three").Sprite;
   kind: "pug" | "tuna";
   t: number;
   delay: number;
@@ -57,35 +57,39 @@ export interface FlyParticle {
   toY: number;
   arc: number;
   phaseSplit: number;
-  centerBurstDone: boolean;
   trailTimer: number;
+  baseW: number;
+  baseH: number;
   onComplete?: () => void;
 }
 
 export interface TrailParticle {
-  el: HTMLDivElement;
+  sprite: import("three").Sprite;
   t: number;
   duration: number;
   x: number;
   y: number;
+  size: number;
 }
 
 export interface BurstParticle {
-  el: HTMLDivElement;
+  sprite: import("three").Sprite;
   t: number;
   duration: number;
   x: number;
   y: number;
   vx: number;
   vy: number;
+  size: number;
 }
 
 export interface FlashParticle {
-  el: HTMLDivElement;
+  sprite: import("three").Sprite;
   t: number;
   duration: number;
   x: number;
   y: number;
+  size: number;
 }
 
 export const CAT_IDS = ["orange", "maxwell", "paralized", "tuxedo", "barong"] as const;

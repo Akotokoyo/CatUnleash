@@ -18,6 +18,7 @@ import {
   objects,
   playerRoot,
 } from "./state";
+import { makeBalloonSprite } from "./balloonSprite";
 import {
   makeTexturedPlane,
   resizeTexturedPlane,
@@ -88,8 +89,7 @@ export function randomPickupCatId(): CatId {
 export function makeCatPickup(catId: CatId): THREE.Group {
   const texture = catFrontTextures[catId];
   if (!texture) throw new Error(`Texture pickup gatto mancante: ${catId}`);
-  const group = new THREE.Group();
-  group.add(makeTexturedPlane(texture, CAT_PICKUP_SPRITE_HEIGHT));
+  const group = makeBalloonSprite(texture, CAT_PICKUP_SPRITE_HEIGHT);
   group.userData.pickupCatId = catId;
   return group;
 }
