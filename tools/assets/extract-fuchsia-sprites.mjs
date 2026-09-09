@@ -1,18 +1,22 @@
 #!/usr/bin/env node
 /**
- * Estrae sprite da un PNG con sfondo fucsia (#ff00ff).
- * Key RGB duro (dentro tolerance → alpha 0) + despill → componenti → crop → N×N con resize premoltiplicato.
+ * Estrae sprite da un foglio con sfondo chroma (default #ff00ff).
+ * Accetta PNG veri e JPEG con estensione .png; stima il colore sfondo dagli angoli.
  *
  * Uso:
  *   node tools/assets/extract-fuchsia-sprites.mjs input.png --out out-dir --names a.png,b.png
  *   node tools/assets/extract-fuchsia-sprites.mjs input.png --size 256 --out out-dir
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PNG } from 'pngjs';
+import {
+  DEFAULT_KEY,
+  detectBackgroundKey,
+  readSheetImage,
+} from './sheet-image.mjs';
 
-const KEY = { r: 255, g: 0, b: 255 };
 const DEFAULT_SIZE = 100;
 const DEFAULT_TOLERANCE = 48;
 const DEFAULT_MIN_AREA = 500;
@@ -25,22 +29,41 @@ const DEFAULT_MIN_AREA = 500;
  *   names?: string[],
  *   tolerance?: number,
  *   minArea?: number,
+ *   key?: { r: number, g: number, b: number },
+ *   detectKey?: boolean,
  * }} [opts]
- * @returns {{ files: string[], boxes: {x:number,y:number,w:number,h:number,area:number}[] }}
+ * @returns {{
+ *   files: string[],
+ *   boxes: {x:number,y:number,w:number,h:number,area:number}[],
+ *   key: { r: number, g: number, b: number },
+ *   keySpread: number,
+ *   sourceFormat: 'png' | 'jpeg',
+ * }}
  */
 export function extractFuchsiaSprites(inputPath, opts = {}) {
   const size = opts.size ?? DEFAULT_SIZE;
   const tolerance = opts.tolerance ?? DEFAULT_TOLERANCE;
   const minArea = opts.minArea ?? DEFAULT_MIN_AREA;
+  const detectKey = opts.detectKey ?? true;
   const outDir = opts.outDir ?? join(dirname(inputPath), basename(inputPath, '.png') + '_sprites');
 
-  const src = PNG.sync.read(readFileSync(inputPath));
+  const { png: src, format: sourceFormat } = readSheetImage(inputPath);
   const { width, height, data } = src;
+
+  let key = opts.key ?? DEFAULT_KEY;
+  let keySpread = 0;
+
+  if (detectKey && !opts.key) {
+    const detected = detectBackgroundKey(src);
+    key = detected.key;
+    keySpread = detected.spread;
+  }
+
   const mask = new Uint8Array(width * height);
 
   for (let i = 0; i < width * height; i++) {
     const o = i * 4;
-    mask[i] = isKey(data[o], data[o + 1], data[o + 2], tolerance) ? 0 : 1;
+    mask[i] = isKey(data[o], data[o + 1], data[o + 2], key, tolerance) ? 0 : 1;
   }
 
   let components = connectedComponents(mask, width, height, minArea);
@@ -64,7 +87,7 @@ export function extractFuchsiaSprites(inputPath, opts = {}) {
     const c = components[i];
     boxes.push({ x: c.x, y: c.y, w: c.w, h: c.h, area: c.area });
 
-    const cropped = cropWithKeyAlpha(data, width, c, tolerance);
+    const cropped = cropWithKeyAlpha(data, width, c, key, tolerance);
     const square = fitInSquare(cropped, size);
 
     const name = opts.names?.[i] ?? `${String(i + 1).padStart(2, '0')}.png`;
@@ -73,24 +96,30 @@ export function extractFuchsiaSprites(inputPath, opts = {}) {
     files.push(outPath);
   }
 
-  return { files, boxes };
+  return { files, boxes, key, keySpread, sourceFormat };
 }
 
-function isKey(r, g, b, tolerance) {
+function isKey(r, g, b, key, tolerance) {
   return (
-    Math.abs(r - KEY.r) <= tolerance &&
-    Math.abs(g - KEY.g) <= tolerance &&
-    Math.abs(b - KEY.b) <= tolerance
+    Math.abs(r - key.r) <= tolerance &&
+    Math.abs(g - key.g) <= tolerance &&
+    Math.abs(b - key.b) <= tolerance
   );
 }
 
-/** Key duro: dentro tolerance → trasparente; altrimenti opaco + despill magenta. */
-function keyedRgba(r, g, b, a, tolerance) {
-  if (a === 0 || isKey(r, g, b, tolerance)) return [0, 0, 0, 0];
+function isMagentaKey(key) {
+  return key.r > 80 && key.b > 80 && key.g < key.r * 0.6 && key.g < key.b * 0.6;
+}
 
-  const spill = Math.max(0, Math.min(r, b) - g);
-  r = Math.max(0, r - spill);
-  b = Math.max(0, b - spill);
+/** Key duro: dentro tolerance → trasparente; altrimenti opaco + despill verso il key. */
+function keyedRgba(r, g, b, a, key, tolerance) {
+  if (a === 0 || isKey(r, g, b, key, tolerance)) return [0, 0, 0, 0];
+
+  if (isMagentaKey(key)) {
+    const spill = Math.max(0, Math.min(r, b) - g);
+    r = Math.max(0, r - spill);
+    b = Math.max(0, b - spill);
+  }
 
   return [r, g, b, 255];
 }
@@ -122,7 +151,6 @@ function connectedComponents(mask, width, height, minArea) {
         if (cx > maxX) maxX = cx;
         if (cy > maxY) maxY = cy;
 
-        // 4-neigh
         if (cx > 0) push(cur - 1);
         if (cx + 1 < width) push(cur + 1);
         if (cy > 0) push(cur - width);
@@ -151,7 +179,7 @@ function connectedComponents(mask, width, height, minArea) {
   return out;
 }
 
-function cropWithKeyAlpha(data, srcW, box, tolerance) {
+function cropWithKeyAlpha(data, srcW, box, key, tolerance) {
   const png = new PNG({ width: box.w, height: box.h });
   for (let y = 0; y < box.h; y++) {
     for (let x = 0; x < box.w; x++) {
@@ -162,6 +190,7 @@ function cropWithKeyAlpha(data, srcW, box, tolerance) {
         data[si + 1],
         data[si + 2],
         data[si + 3],
+        key,
         tolerance,
       );
       png.data[di] = r;
@@ -186,7 +215,6 @@ function fitInSquare(src, size) {
 
   for (let y = 0; y < dh; y++) {
     for (let x = 0; x < dw; x++) {
-      // bilinear sample
       const sx = ((x + 0.5) / scale) - 0.5;
       const sy = ((y + 0.5) / scale) - 0.5;
       const [r, g, b, a] = sampleBilinear(src, sx, sy);
@@ -213,7 +241,6 @@ function sampleBilinear(src, x, y) {
   const c01 = sampleClamp(src, x0, y1);
   const c11 = sampleClamp(src, x1, y1);
 
-  // premoltiplica: altrimenti RGB di pixel a=0 (nero) sporca i vicini → rettangolo grigio
   const p00 = premult(c00);
   const p10 = premult(c10);
   const p01 = premult(c01);
@@ -247,13 +274,26 @@ function sampleClamp(src, x, y) {
   return [src.data[i], src.data[i + 1], src.data[i + 2], src.data[i + 3]];
 }
 
+function parseKey(value) {
+  const parts = value.split(',').map((s) => Number(s.trim()));
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n) || n < 0 || n > 255)) {
+    throw new Error(`--key richiede r,g,b (0-255), ricevuto: ${value}`);
+  }
+  return { r: parts[0], g: parts[1], b: parts[2] };
+}
+
+function formatKey(key) {
+  const hex = `#${[key.r, key.g, key.b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+  return `rgb(${key.r},${key.g},${key.b}) ${hex}`;
+}
+
 // --- CLI ---
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isMain) {
   const argv = process.argv.slice(2);
   const positional = [];
-  const flags = {};
+  const flags = { detectKey: true };
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -262,6 +302,8 @@ if (isMain) {
     else if (a === '--names') flags.names = argv[++i].split(',').map((s) => s.trim()).filter(Boolean);
     else if (a === '--tolerance') flags.tolerance = Number(argv[++i]);
     else if (a === '--min-area') flags.minArea = Number(argv[++i]);
+    else if (a === '--key') flags.key = parseKey(argv[++i]);
+    else if (a === '--no-detect-key') flags.detectKey = false;
     else if (a.startsWith('-')) {
       console.error(`Flag sconosciuto: ${a}`);
       process.exit(1);
@@ -270,7 +312,9 @@ if (isMain) {
 
   const inputArg = positional[0];
   if (!inputArg) {
-    console.error('Usage: extract-fuchsia-sprites.mjs <input.png> [--size 100] [--out dir] [--names a.png,b.png]');
+    console.error(
+      'Usage: extract-fuchsia-sprites.mjs <input.png> [--size 100] [--out dir] [--names a.png,b.png] [--key r,g,b] [--no-detect-key]',
+    );
     process.exit(1);
   }
 
@@ -286,7 +330,16 @@ if (isMain) {
     names: flags.names,
     tolerance: flags.tolerance,
     minArea: flags.minArea,
+    key: flags.key,
+    detectKey: flags.detectKey,
   });
+
+  console.log(
+    `source=${result.sourceFormat} key=${formatKey(result.key)} spread=${result.keySpread.toFixed(1)}`,
+  );
+  if (result.keySpread > 40) {
+    console.warn('warn: angoli molto diversi — controlla il foglio');
+  }
 
   console.log(`# ${result.files.length} sprite → ${result.files[0] ? dirname(result.files[0]) : outDir}`);
   for (let i = 0; i < result.files.length; i++) {

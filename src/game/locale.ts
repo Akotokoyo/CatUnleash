@@ -23,5 +23,6 @@ export function applyLanguage(): void {
     if (key) element.textContent = t(key);
   });
   ui.sound.setAttribute("aria-label", t("sound.label"));
+  ui.pauseMenu.setAttribute("aria-label", t("hud.menu"));
   updateMenuSaveState();
 }

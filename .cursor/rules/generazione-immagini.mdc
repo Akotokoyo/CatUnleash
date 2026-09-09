@@ -7,7 +7,8 @@ alwaysApply: true
 
 Prima di generare / estrarre / chiedere PNG di gioco (`public/assets/cats/`, `public/assets/pugs/`, contact-sheet, prompt Nano Banana / `GenerateImage`):
 
-1. **Leggi e segui** `tools/assets/generazione_sprite.md` (pipeline, anti-alone, stile, extract, batch tema).
+1. **Leggi e segui** `tools/assets/generazione_sprite.md` (pipeline, anti-alone, stile, extract, batch tema). Skill progetto: `.cursor/skills/generazione-sprite/SKILL.md` (rimanda al doc).
 2. Non inventare un flusso diverso: foglio fucsia `#ff00ff` → `extract-fuchsia-sprites.mjs` → `public/assets/cats/${theme}/` o `public/assets/pugs/${theme}/`.
 3. Output path e nomi file = convenzione gatto/carlino (vedi doc).
 4. Salva foglio + `.prompt.txt` in `tools/temp/assets/` (temporanei, cancellabili). Non mischiare con gli script in `tools/assets/`.
+5. **Formato prompt**: 4 blocchi (reference → canvas → subject con `NOT` → chroma a bullet). Copia da `tools/temp/assets/carlino_flee.prompt.txt` o `carlino_meme.prompt.txt`; non scrivere chroma in un paragrafo unico.

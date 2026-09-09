@@ -65,12 +65,34 @@ Gatti `--size 256`, carlini `--size 512`.
 
 ## Regole generali di prompting
 
-1. **Prosa da creative director**, non lista di keyword.
+1. **Prosa da creative director**, non lista di keyword — ma **struttura fissa** (sotto).
 2. **Framing positivo**: descrivi cosa vuoi (es. “sfondo fucsia piatto #ff00ff”), non lunghe liste di divieti — ma per il chroma key **ripeti esplicitamente** i vincoli anti-alone (sotto).
 3. Con **immagine di riferimento**: dichiara cosa tenere (stile/rendering del gatto o carlino base) e cosa generare di nuovo (solo il personaggio a tema, non la scena intera). Ref tipici: sprite default in `public/assets/cats/` o `public/assets/pugs/`.
 4. Per una **serie a tema**: blocca stile + inquadratura + scala e riusali uguali tra i fogli dello stesso mondo; meglio **un foglio per turno** se la quality cala.
 5. Chiedi esplicitamente **aspect ratio** (di solito `1:1`) e margine fucsia generoso tra le tile (obbligatorio per lo script: tile non devono toccarsi).
 6. Niente testo, filename, UI, etichette sulle tile.
+
+### Formato prompt (obbligatorio)
+
+Ogni `.prompt.txt` in `tools/temp/assets/` segue **4 blocchi**, nello stesso ordine di `carlino_flee.prompt.txt`:
+
+| Blocco | Cosa scrivere |
+|--------|----------------|
+| **Reference** | Cosa tenere dal ref allegato (stile, proporzioni, breed, tema/costume) |
+| **Canvas** | `1:1`, sfondo `#ff00ff` piatto che riempie l'immagine |
+| **Subject** | Pose, inquadratura, scala (`~40%` larghezza / `~60%` altezza o `~20%` margine fucsia), espressione; vincoli espliciti `NOT …` |
+| **Chroma masking** | **Bullet list** (mai un paragrafo unico) |
+
+Template pronti:
+
+| File | Uso |
+|------|-----|
+| `cats_back.prompt.txt` | Gatti vista posteriore (`*_center`) |
+| `carlino_meme.prompt.txt` | Carlino fronte, occhioni tristi meme |
+| `carlino_flee.prompt.txt` | Carlino profilo destro, fuga |
+| `{theme}_carlino_meme.prompt.txt` | Variante a tema (es. `city_carlino_meme.prompt.txt`) |
+
+Skill progetto (checklist): `.cursor/skills/generazione-sprite/SKILL.md`.
 
 ### Anti-alone (obbligatorio — altrimenti resta grigio dopo extract)
 
@@ -130,15 +152,37 @@ Chroma masking: crisp 1-2px hard black outline; no AA/bleed into #ff00ff; no sha
 
 ### Prompt carlini (`*_pugs_sheet`)
 
-Tre stati, stesso carlino meme photorealistico. Esempi in `carlino_bark.prompt.txt`, `carlino_flee.prompt.txt`.
+Tre stati, stesso carlino meme photorealistico. Template: `carlino_meme.prompt.txt`, `carlino_flee.prompt.txt` (e `carlino_bark.prompt.txt` se presente).
 
 | file | pose |
 |------|------|
-| `carlino_meme.png` | fronte, espressione meme classica |
+| `carlino_meme.png` | fronte seduto, occhioni tristi meme (sad puppy eyes) |
 | `carlino_bark.png` | fronte, abbaiata comica arrabbiata |
 | `carlino_flee.png` | profilo destro, fuga panico |
 
 Adatta accessori/tema al mondo; tieni proporzioni e rendering del carlino base.
+
+#### `carlino_meme` — template
+
+Vedi `tools/temp/assets/carlino_meme.prompt.txt`. Per un mondo specifico copia il file in `{theme}_carlino_meme.prompt.txt` e compila il blocco Theme (es. city = gilet cantiere).
+
+```
+Use the attached pug sprite as the ONLY character reference: same photorealistic meme pug (carlino), same fawn/tan fur, black mask, chunky body, same rendering quality and proportions.
+
+Single game sprite, square 1:1, pure flat fuchsia background (#ff00ff) filling the entire image.
+
+Subject: ONE pug only, centered with generous fuchsia margin (~20% fuchsia on each side). Front view, sitting upright facing camera directly. Meme "sad puppy eyes" expression: enormous glossy round eyes (~2× normal size), dewy pleading look, downturned mouth, soft worried brows. NOT barking, NOT snarling, NOT showing teeth, NOT angry, NOT side view, NOT running.
+
+Theme: [city / jungle / space / …] — costume and accessories only (e.g. city = orange construction safety vest with neon reflective stripes).
+
+Chroma masking:
+- crisp 1-2px hard black outline around entire silhouette
+- no anti-aliasing / bleed into #ff00ff
+- no drop shadow, soft shadow, outer glow, gray fringe, ground contact shadow
+- shading only inside the character
+- outside black outline: only pure #ff00ff
+- no text, no labels
+```
 
 ### Follow-up se il foglio è troppo fitto / bordi sporchi
 
@@ -146,11 +190,11 @@ Adatta accessori/tema al mondo; tieni proporzioni e rendering del carlino base.
 Keep the same style and fuchsia background (#ff00ff). Regenerate with more fuchsia padding between sprites, sharper silhouettes, zero fringe, zero text.
 ```
 
-### Follow-up singola tile
+### Singola tile
 
-```
-Same style lock from the character reference. One sprite only, centered on pure fuchsia (#ff00ff), square 1:1. Subject: [describe pose + theme]. Clean silhouette for chroma masking — hard black outline, no shadows.
-```
+Non usare prompt in prosa libera. Parti dal template dello stato (`carlino_meme.prompt.txt`, `carlino_flee.prompt.txt`, …), compila Theme e salva come `{theme}_{sprite}.prompt.txt`.
+
+Follow-up se il foglio ha ancora ombre / AA: vedi blocco sopra in **Anti-alone**.
 
 ## Post-produzione
 

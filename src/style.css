@@ -47,9 +47,9 @@ body.loading #app {
 
 #hud {
   position: absolute;
-  left: 10px;
-  right: 56px;
-  bottom: max(14px, env(safe-area-inset-bottom));
+  left: 60px;
+  right: 10px;
+  top: max(14px, env(safe-area-inset-top));
   z-index: 4;
   display: flex;
   justify-content: center;
@@ -116,7 +116,7 @@ body.loading #app {
 }
 
 .fly-icon-pug {
-  background: url("/assets/pugs/carlino_meme.png") center / contain no-repeat;
+  background: center / contain no-repeat;
   filter: drop-shadow(0 4px 8px #0006);
 }
 
@@ -343,6 +343,22 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 .instructions small { color: #76dcb9; font-size: 9px; }
 .controls { margin: 13px 0 0; color: #8cbeb0; font-size: 11px; }
 
+#pause-menu {
+  position: absolute;
+  z-index: 8;
+  left: 14px;
+  top: max(14px, env(safe-area-inset-top));
+  width: 42px;
+  height: 42px;
+  color: #ffe17b;
+  font: 800 22px serif;
+  line-height: 1;
+  border: 2px solid #d5a73d;
+  border-radius: 50%;
+  background: #0d3432dc;
+  cursor: pointer;
+}
+
 #sound {
   position: absolute;
   z-index: 8;
@@ -362,14 +378,13 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
   position: absolute;
   z-index: 7;
   left: 50%;
-  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 78px);
-  top: auto;
+  top: calc(max(14px, env(safe-area-inset-top)) + 72px);
   opacity: 0;
   color: #fff4a4;
   font: 800 28px "Baloo 2", sans-serif;
   text-align: center;
   text-shadow: 0 3px #163a31, 0 0 12px #000;
-  transform: translate(-50%, 10px) scale(.8);
+  transform: translate(-50%, -10px) scale(.8);
   transition: opacity .18s, transform .18s;
   pointer-events: none;
 }

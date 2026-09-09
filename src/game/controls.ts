@@ -1,6 +1,6 @@
 import type { Language } from "../i18n";
 import { canvas, ui } from "./dom";
-import { continueRun, shiftLane, startRunFromZero } from "./gameplay";
+import { continueRun, pauseToMenu, restartAtWorldStart, shiftLane, startRunFromZero } from "./gameplay";
 import { applyLanguage, setLanguage } from "./locale";
 import { hasSave, writeSave } from "./save";
 import { audio, game } from "./state";
@@ -17,7 +17,7 @@ export function bindControls(): void {
   });
   ui.restart.addEventListener("click", (event) => {
     event.preventDefault();
-    startRunFromZero();
+    restartAtWorldStart();
   });
   ui.language.addEventListener("change", () => {
     setLanguage(ui.language.value as Language);
@@ -27,11 +27,16 @@ export function bindControls(): void {
     const muted = audio.toggle();
     ui.sound.textContent = muted ? "×" : "♪";
   });
+  ui.pauseMenu.addEventListener("click", (event) => {
+    event.preventDefault();
+    pauseToMenu();
+  });
   window.addEventListener("keydown", (event) => {
     if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") shiftLane(-1);
     if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") shiftLane(1);
     if ((event.key === " " || event.key === "Enter") && game.runState !== "running") {
-      if (hasSave()) continueRun();
+      if (game.runState === "gameover") restartAtWorldStart();
+      else if (hasSave()) continueRun();
       else startRunFromZero();
     }
   });

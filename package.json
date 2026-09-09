@@ -7,7 +7,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "android:sync": "npm run build && cap sync android",
-    "android:apk": "npm run android:sync && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android.ps1"
+    "android:apk": "npm run android:sync && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android.ps1",
+    "buildapk": "npm run android:apk"
   },
   "keywords": [
     "threejs",
@@ -25,6 +26,7 @@
   "devDependencies": {
     "@capacitor/cli": "^8.5.1",
     "@types/three": "^0.185.4",
+    "jpeg-js": "^0.4.4",
     "pngjs": "^7.0.0",
     "typescript": "^7.0.2",
     "vite": "^8.2.2"

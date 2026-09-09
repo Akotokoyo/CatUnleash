@@ -97,6 +97,7 @@ export interface ThemeSpriteSet {
   catFront: Partial<Record<CatId, THREE.Texture>>;
   pugIdle: THREE.Texture;
   pugBark: THREE.Texture;
+  pugFlee: THREE.Texture;
 }
 
 export type ScreenMode = "menu" | "hud" | "gameover";

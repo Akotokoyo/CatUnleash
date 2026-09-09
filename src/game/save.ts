@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { ENVIRONMENTS } from "../environments";
-import { LANES, SAVE_KEY } from "./constants";
+import { LANES, SAVE_KEY, WORLD_SEGMENT_METERS } from "./constants";
 import { ui } from "./dom";
 import { game } from "./state";
 import type { RunSave } from "./types";
@@ -72,8 +72,12 @@ export function applySave(save: RunSave): void {
   game.tunaCount = THREE.MathUtils.clamp(save.tunaCount, 0, 20);
   game.extraLives = Math.max(0, save.extraLives);
   game.runTime = Math.max(0, save.runTime);
-  game.level = Math.max(1, Math.floor(game.distance / 250) + 1);
-  game.environmentIndex = (game.level - 1) % ENVIRONMENTS.length;
+  game.level = save.level >= 1
+    ? save.level
+    : Math.max(1, Math.floor(game.distance / WORLD_SEGMENT_METERS) + 1);
+  game.environmentIndex = save.environmentIndex >= 0
+    ? save.environmentIndex % ENVIRONMENTS.length
+    : (game.level - 1) % ENVIRONMENTS.length;
   game.spawnTravel = Math.max(0, save.spawnTravel);
   game.nextSpawn = Math.max(1, save.nextSpawn);
   game.stridePhase = 0;

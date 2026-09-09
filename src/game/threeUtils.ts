@@ -1,5 +1,43 @@
 import * as THREE from "three";
 
+export function textureAspect(texture: THREE.Texture): number {
+  const image = texture.image as { width: number; height: number };
+  return image.width > 0 && image.height > 0 ? image.width / image.height : 1;
+}
+
+export function makeTexturedPlane(texture: THREE.Texture, height: number, flipX: 1 | -1 = 1): THREE.Mesh {
+  const width = height * textureAspect(texture);
+  const geometry = new THREE.PlaneGeometry(width, height);
+  geometry.translate(0, height * 0.5, 0);
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    alphaTest: 0.08,
+    depthWrite: true,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.scale.x = flipX;
+  return mesh;
+}
+
+export function resizeTexturedPlane(mesh: THREE.Mesh, texture: THREE.Texture, height: number): void {
+  const width = height * textureAspect(texture);
+  mesh.geometry.dispose();
+  const geometry = new THREE.PlaneGeometry(width, height);
+  geometry.translate(0, height * 0.5, 0);
+  mesh.geometry = geometry;
+}
+
+export function setTexturedPlaneTexture(mesh: THREE.Mesh, texture: THREE.Texture): void {
+  const material = mesh.material as THREE.MeshBasicMaterial;
+  material.map = texture;
+  material.needsUpdate = true;
+}
+
+export function setTexturedPlaneFlip(mesh: THREE.Mesh, flipX: 1 | -1): void {
+  mesh.scale.x = flipX;
+}
+
 export function setGroupOpacity(group: THREE.Group, factor: number): void {
   group.traverse((object) => {
     if (!(object instanceof THREE.Mesh || object instanceof THREE.Points)) return;

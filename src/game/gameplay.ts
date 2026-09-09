@@ -1,6 +1,18 @@
 import * as THREE from "three";
-import { getEnvironment } from "../environments";
-import { LANES, PLAYER_Z, SAVE_INTERVAL } from "./constants";
+import { ENVIRONMENTS, getEnvironment } from "../environments";
+import {
+  BASE_RUN_SPEED,
+  LANES,
+  MAX_RUN_SPEED_FACTOR,
+  PLAYER_Z,
+  RUN_SPEED_FIXED,
+  RUN_SPEED_RAMP_EXPONENT,
+  RUN_SPEED_RAMP_SECONDS,
+  SAVE_INTERVAL,
+  WAVE_SPAWN_MAX,
+  WAVE_SPAWN_MIN,
+  WORLD_SEGMENT_METERS,
+} from "./constants";
 import { rebuildPack, packIsFull, updatePack } from "./cats";
 import { showScreen, showToast, ui } from "./dom";
 import {
@@ -12,7 +24,8 @@ import {
   updateResourceHud,
 } from "./flyFx";
 import { t } from "./locale";
-import { clearObjects, spawnWave, syncPugPackMood } from "./objects";
+import { clearObjects, pugsDominate, spawnWave, syncPugPackMood } from "./objects";
+import { resetWaveSequencer } from "./wavePatterns";
 import {
   applySave,
   clearSave,
@@ -53,9 +66,18 @@ function isCheckpointSave(save: import("./types").RunSave): boolean {
     || save.pugsScared > 0;
 }
 
-export function currentSpeedFactor(): number {
-  const speed = 12 * Math.min(7, Math.pow(1 + game.runTime / 45, 1.25));
-  return speed / 12;
+export function currentSpeedFactor(runTime = game.runTime): number {
+  if (RUN_SPEED_FIXED) {
+    return MAX_RUN_SPEED_FACTOR;
+  }
+  return Math.min(
+    MAX_RUN_SPEED_FACTOR,
+    Math.pow(1 + runTime / RUN_SPEED_RAMP_SECONDS, RUN_SPEED_RAMP_EXPONENT),
+  );
+}
+
+export function currentRunSpeed(runTime = game.runTime): number {
+  return BASE_RUN_SPEED * currentSpeedFactor(runTime);
 }
 
 export function scoreValue(): number {
@@ -64,40 +86,51 @@ export function scoreValue(): number {
 
 export function refreshRunHud(): void {
   ui.score.textContent = String(scoreValue());
-  ui.speed.textContent = `${currentSpeedFactor().toFixed(1)}×`;
   updateResourceHud();
 }
 
-export function startRunFromZero(): void {
+function beginRun(distance: number, level: number, environmentIndex: number): void {
   resetRunObjects();
-  clearSave();
   game.runState = "running";
   game.laneIndex = 1;
   game.targetX = LANES[game.laneIndex];
   game.catCount = 1;
-  game.distance = 0;
+  game.distance = distance;
   game.killScore = 0;
   game.pugsScared = 0;
   game.tunaCount = 0;
   game.extraLives = 0;
-  game.level = 1;
+  game.level = level;
   game.spawnTravel = 0;
-  game.nextSpawn = 20;
+  game.nextSpawn = WAVE_SPAWN_MIN;
   game.runTime = 0;
   game.stridePhase = 0;
-  game.invulnerableUntil = 0;
+  game.invulnerableUntil = 2;
   game.saveTimer = 0;
   game.pendingThemeApply = undefined;
   game.pendingLevelToast = undefined;
   game.postTransitionSpawnReady = false;
   game.transitionTargetIndex = undefined;
-  setEnvironment(0);
+  setEnvironment(environmentIndex);
   rebuildPack();
   playerRoot.position.x = game.targetX;
   showScreen("hud");
   audio.start();
   refreshRunHud();
   showToast(t("toast.run"));
+}
+
+export function startRunFromZero(): void {
+  clearSave();
+  beginRun(0, 1, 0);
+}
+
+export function restartAtWorldStart(): void {
+  const level = Math.max(1, game.level);
+  const environmentIndex = (level - 1) % ENVIRONMENTS.length;
+  const distance = (level - 1) * WORLD_SEGMENT_METERS;
+  clearSave();
+  beginRun(distance, level, environmentIndex);
 }
 
 export function continueRun(): void {
@@ -119,6 +152,14 @@ export function continueRun(): void {
   writeSave();
 }
 
+export function pauseToMenu(): void {
+  if (game.runState !== "running") return;
+  writeSave();
+  game.runState = "menu";
+  showScreen("menu");
+  showToast(t("toast.saved"));
+}
+
 export function endRun(): void {
   game.runState = "gameover";
   clearSave();
@@ -131,6 +172,7 @@ export function endRun(): void {
 
 function resetRunObjects(): void {
   clearObjects();
+  resetWaveSequencer();
   clearFlyFx();
 }
 
@@ -162,7 +204,7 @@ function collect(object: RunnerObject): boolean {
     return true;
   }
 
-  if (game.catCount > object.strength) {
+  if (!pugsDominate(object.strength)) {
     game.catCount -= 1;
     requestAnimationFrame(() => rebuildPack());
     if (game.catCount <= 0) {
@@ -208,7 +250,7 @@ function updateObjects(travel: number, delta: number): void {
     if (object.type !== "obstacle" && object.type !== "mouse" && object.type !== "milk") {
       object.mesh.rotation.y += delta * 2.2;
     }
-    object.mesh.position.y = 0.3 + Math.sin(game.elapsed * 3.2 + object.phase) * 0.12;
+    object.mesh.position.y = 0.3;// + Math.sin(game.elapsed * 3.2 + object.phase) * 0.12;
     if (object.type === "mouse") {
       syncPugPackMood(object);
     }
@@ -241,7 +283,7 @@ export function update(): void {
 
   if (game.runState === "running") {
     game.runTime += delta;
-    const speed = 12 * Math.min(7, Math.pow(1 + game.runTime / 45, 1.25));
+    const speed = currentRunSpeed();
     const travel = speed * delta;
     game.stridePhase += delta * speed * 0.34;
     game.distance += travel * 0.34;
@@ -251,12 +293,12 @@ export function update(): void {
     updateObjects(travel, delta);
     if (game.spawnTravel >= game.nextSpawn && canSpawnWaves()) {
       game.spawnTravel = 0;
-      game.nextSpawn = THREE.MathUtils.randFloat(21, 29);
+      game.nextSpawn = THREE.MathUtils.randFloat(WAVE_SPAWN_MIN, WAVE_SPAWN_MAX);
       spawnWave();
     }
     tryStartEnvironmentVisualTransition();
     tryApplyThemeAtWorldLine();
-    const nextLevel = Math.floor(game.distance / 250) + 1;
+    const nextLevel = Math.floor(game.distance / WORLD_SEGMENT_METERS) + 1;
     if (nextLevel > game.level) {
       game.level = nextLevel;
       scheduleEnvironmentTransition(game.level - 1);
@@ -266,7 +308,6 @@ export function update(): void {
       };
     }
     ui.score.textContent = String(scoreValue());
-    ui.speed.textContent = `${currentSpeedFactor().toFixed(1)}×`;
     game.saveTimer += delta;
     if (game.saveTimer >= SAVE_INTERVAL) {
       game.saveTimer = 0;

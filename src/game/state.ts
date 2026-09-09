@@ -65,6 +65,8 @@ export const textureLoader = new THREE.TextureLoader();
 export const textures = {
   pugIdle: undefined as THREE.Texture | undefined,
   pugBark: undefined as THREE.Texture | undefined,
+  pugFlee: undefined as THREE.Texture | undefined,
+  obstacle: undefined as THREE.Texture | undefined,
 };
 
 export const game = {

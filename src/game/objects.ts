@@ -4,12 +4,24 @@ import {
   gold,
   LANES,
   MAX_PUG_STRENGTH,
-  obsidian,
+  OBSTACLE_SPRITE_HEIGHT,
+  PUG_BARK_SPRITE_SCALE,
+  PUG_IDLE_SPRITE_SCALE,
+  PUG_SPRITE_HEIGHT,
   terracotta,
+  WAVE_TICK_DEPTH,
+  WAVE_TICKS_PER_SPAWN,
 } from "./constants";
 import { spawnCatPickup } from "./cats";
 import type { PickupType, RunnerObject } from "./types";
 import { game, objectRoot, objects, textures } from "./state";
+import { nextWaveTick } from "./wavePatterns";
+import {
+  makeTexturedPlane,
+  resizeTexturedPlane,
+  setTexturedPlaneFlip,
+  setTexturedPlaneTexture,
+} from "./threeUtils";
 
 function makeTuna(): THREE.Group {
   const group = new THREE.Group();
@@ -56,59 +68,39 @@ export function buildTunaFlyImageUrl(): string {
 }
 
 function makeObstacle(): THREE.Group {
+  const texture = textures.obstacle;
+  if (!texture) throw new Error("Texture accalappiacani mancante");
   const group = new THREE.Group();
-  const orange = new THREE.MeshStandardMaterial({ color: 0xf06a32, roughness: 0.68 });
-  const white = new THREE.MeshStandardMaterial({ color: 0xf4f1dc, roughness: 0.72 });
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.75, 0.38), orange);
-  bar.position.y = 1.15;
-  bar.castShadow = true;
-  group.add(bar);
-  for (const x of [-0.65, 0, 0.65]) {
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.77, 0.4), white);
-    stripe.position.set(x, 1.15, -0.02);
-    stripe.rotation.z = -0.35;
-    group.add(stripe);
-  }
-  for (const x of [-0.82, 0.82]) {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.4, 0.22), obsidian);
-    leg.position.set(x, 0.58, 0);
-    group.add(leg);
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.18, 0.55), obsidian);
-    foot.position.set(x, 0.1, 0);
-    group.add(foot);
-    const beacon = new THREE.Mesh(
-      new THREE.SphereGeometry(0.14, 8, 6),
-      new THREE.MeshStandardMaterial({ color: 0xffd43b, emissive: 0xff8a00, emissiveIntensity: 1.6 }),
-    );
-    beacon.position.set(x, 1.68, 0);
-    group.add(beacon);
-  }
+  group.add(makeTexturedPlane(texture, OBSTACLE_SPRITE_HEIGHT));
   return group;
 }
 
-function makePugSprite(texture: THREE.Texture, flipX = 1): THREE.Sprite {
-  const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }),
-  );
-  sprite.scale.set(1.725 * flipX, 1.725, 1);
-  sprite.center.set(0.5, 0);
-  return sprite;
+function makePugSprite(texture: THREE.Texture, flipX: 1 | -1 = 1): THREE.Mesh {
+  const plane = makeTexturedPlane(texture, PUG_SPRITE_HEIGHT, flipX);
+  plane.userData.pugSprite = true;
+  return plane;
 }
 
 function setPugPackTexture(group: THREE.Group, texture: THREE.Texture): void {
   group.traverse((child) => {
-    if (!(child instanceof THREE.Sprite) || !child.userData.pugSprite) return;
-    const material = child.material as THREE.SpriteMaterial;
-    material.map = texture;
-    material.needsUpdate = true;
+    if (!(child instanceof THREE.Mesh) || !child.userData.pugSprite) return;
+    setTexturedPlaneTexture(child, texture);
   });
 }
 
 function setPugPackFlip(group: THREE.Group, flipX: 1 | -1): void {
   group.traverse((child) => {
-    if (!(child instanceof THREE.Sprite) || !child.userData.pugSprite) return;
-    child.scale.x = 1.725 * flipX;
-    child.scale.y = 1.725;
+    if (!(child instanceof THREE.Mesh) || !child.userData.pugSprite) return;
+    setTexturedPlaneFlip(child, flipX);
+  });
+}
+
+function setPugPackScale(group: THREE.Group, height: number): void {
+  group.traverse((child) => {
+    if (!(child instanceof THREE.Mesh) || !child.userData.pugSprite) return;
+    const texture = (child.material as THREE.MeshBasicMaterial).map;
+    if (!texture) return;
+    resizeTexturedPlane(child, texture, height);
   });
 }
 
@@ -124,44 +116,37 @@ function makeMousePack(strength: number): THREE.Group {
   return group;
 }
 
-function pugsInMajority(strength: number): boolean {
+export function pugsDominate(strength: number): boolean {
   return strength >= game.catCount;
 }
 
 export function syncPugPackMood(object: RunnerObject): void {
   if (object.type !== "mouse" || object.resolved) return;
-  const mood = pugsInMajority(object.strength) ? "bark" : "idle";
+  const mood = pugsDominate(object.strength) ? "bark" : "idle";
   if (object.mesh.userData.pugMood === mood) return;
   object.mesh.userData.pugMood = mood;
-  setPugPackTexture(object.mesh, mood === "bark" ? textures.pugBark! : textures.pugIdle!);
+  const bark = mood === "bark";
+  setPugPackTexture(object.mesh, bark ? textures.pugBark! : textures.pugIdle!);
+  setPugPackScale(
+    object.mesh,
+    PUG_SPRITE_HEIGHT * (bark ? PUG_BARK_SPRITE_SCALE : PUG_IDLE_SPRITE_SCALE),
+  );
   setPugPackFlip(object.mesh, 1);
 }
 
-function randomStrength(): number {
-  return 1 + Math.floor(Math.random() * MAX_PUG_STRENGTH);
-}
-
 export function spawnWave(): void {
-  const laneOrder = [0, 1, 2].sort(() => Math.random() - 0.5);
-  const roll = Math.random();
-  if (roll < 0.22) {
-    spawnCatPickup(laneOrder[0]);
-    spawnObject("mouse", laneOrder[1], randomStrength());
-  } else if (roll < 0.52) {
-    spawnObject("tuna", laneOrder[0], 0);
-    spawnObject("mouse", laneOrder[1], randomStrength());
-  } else if (roll < 0.72) {
-    spawnObject("mouse", laneOrder[0], randomStrength());
-    spawnObject("mouse", laneOrder[1], randomStrength());
-  } else if (roll < 0.88) {
-    spawnObject("mouse", laneOrder[0], randomStrength());
-  } else {
-    spawnObject("obstacle", laneOrder[0], 0);
-    spawnObject("mouse", laneOrder[1], randomStrength());
+  for (let waveTick = 0; waveTick < WAVE_TICKS_PER_SPAWN; waveTick += 1) {
+    const tick = nextWaveTick();
+    const depth = waveTick * WAVE_TICK_DEPTH;
+    for (let lane = 0; lane < tick.length; lane += 1) {
+      const cell = tick[lane];
+      if (!cell) continue;
+      spawnObject(cell.type, lane, cell.strength, depth);
+    }
   }
 }
 
-function spawnObject(type: PickupType, lane: number, strength: number): void {
+function spawnObject(type: PickupType, lane: number, strength: number, depth = 0): void {
   if (type === "milk") {
     spawnCatPickup(lane);
     return;
@@ -172,7 +157,7 @@ function spawnObject(type: PickupType, lane: number, strength: number): void {
       : type === "obstacle"
         ? makeObstacle()
         : makeMousePack(strength);
-  mesh.position.set(LANES[lane], 0.3, -86 - Math.random() * 4);
+  mesh.position.set(LANES[lane], 0.3, -86 - Math.random() * 4 - depth);
   objectRoot.add(mesh);
   const runner: RunnerObject = { mesh, type, lane, strength, phase: Math.random() * Math.PI * 2 };
   objects.push(runner);

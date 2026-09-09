@@ -12,13 +12,32 @@ export const terracotta = new THREE.MeshStandardMaterial({ color: 0xac4f2d, roug
 export const cream = new THREE.MeshStandardMaterial({ color: 0xf7e3a6, roughness: 0.72 });
 export const obsidian = new THREE.MeshStandardMaterial({ color: 0x13201e, roughness: 0.35, metalness: 0.25 });
 
+export const SPRITE_SCALE = 1.8;
+
 export const MAX_PUG_STRENGTH = 3;
+export const PUG_SPRITE_HEIGHT = 1.725 * SPRITE_SCALE;
+export const PUG_BARK_SPRITE_SCALE = 1.08;
+export const PUG_IDLE_SPRITE_SCALE = 1.03;
 export const MAX_EXTRA_LIVES = 5;
 export const MAX_PACK_SIZE = 5;
 export const SAVE_KEY = "catunleash_run_v1";
 export const SAVE_INTERVAL = 1;
-export const CAT_SPRITE_HEIGHT = 1.60;
-export const CAT_PICKUP_SPRITE_HEIGHT = 1.35;
+export const CAT_SPRITE_HEIGHT = 1.60 * SPRITE_SCALE;
+export const CAT_PICKUP_SPRITE_HEIGHT = 1.35 * SPRITE_SCALE;
+export const OBSTACLE_SPRITE_HEIGHT = 2.1 * SPRITE_SCALE;
 export const CAT_FACING_THRESHOLD = 0.12;
 export const PACK_LANE_SPREAD = 0.34;
 export const PACK_ROW_DEPTH = 0.68;
+
+export const BASE_RUN_SPEED = 3;
+export const RUN_SPEED_FIXED = true;
+export const MAX_RUN_SPEED_FACTOR = 7;
+export const RUN_SPEED_RAMP_SECONDS = 45;
+export const RUN_SPEED_RAMP_EXPONENT = 1.25;
+
+export const WORLD_SEGMENT_METERS = 250;
+
+export const WAVE_SPAWN_MIN = 30;
+export const WAVE_SPAWN_MAX = 42;
+export const WAVE_TICK_DEPTH = 22;
+export const WAVE_TICKS_PER_SPAWN = 2;

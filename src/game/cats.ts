@@ -18,28 +18,22 @@ import {
   objects,
   playerRoot,
 } from "./state";
+import {
+  makeTexturedPlane,
+  resizeTexturedPlane,
+  setTexturedPlaneFlip,
+  setTexturedPlaneTexture,
+} from "./threeUtils";
 
-export function applyCatSpriteScale(sprite: THREE.Sprite, texture: THREE.Texture, flipX = 1): void {
-  const image = texture.image as { width: number; height: number };
-  const aspect = image.width > 0 && image.height > 0 ? image.width / image.height : 1;
-  sprite.scale.set(CAT_SPRITE_HEIGHT * aspect * flipX, CAT_SPRITE_HEIGHT, 1);
+export function makeCatSprite(texture: THREE.Texture, flipX: 1 | -1 = 1): THREE.Mesh {
+  return makeTexturedPlane(texture, CAT_SPRITE_HEIGHT, flipX);
 }
 
-export function makeCatSprite(texture: THREE.Texture, flipX = 1): THREE.Sprite {
-  const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }),
-  );
-  applyCatSpriteScale(sprite, texture, flipX);
-  sprite.center.set(0.5, 0);
-  return sprite;
-}
-
-export function setCatFacing(sprite: THREE.Sprite, texture: THREE.Texture, facing: CatFacing): void {
-  const material = sprite.material as THREE.SpriteMaterial;
-  const flipX = facing === "right" ? -1 : 1;
-  material.map = texture;
-  applyCatSpriteScale(sprite, texture, flipX);
-  material.needsUpdate = true;
+export function setCatFacing(plane: THREE.Mesh, texture: THREE.Texture, facing: CatFacing): void {
+  const flipX: 1 | -1 = facing === "right" ? -1 : 1;
+  setTexturedPlaneTexture(plane, texture);
+  resizeTexturedPlane(plane, texture, CAT_SPRITE_HEIGHT);
+  setTexturedPlaneFlip(plane, flipX);
 }
 
 export function catFacingFromLane(dx: number): CatFacing {
@@ -91,22 +85,11 @@ export function randomPickupCatId(): CatId {
   return CAT_IDS[Math.floor(Math.random() * CAT_IDS.length)];
 }
 
-export function applyPickupSpriteScale(sprite: THREE.Sprite, texture: THREE.Texture): void {
-  const image = texture.image as { width: number; height: number };
-  const aspect = image.width > 0 && image.height > 0 ? image.width / image.height : 1;
-  sprite.scale.set(CAT_PICKUP_SPRITE_HEIGHT * aspect, CAT_PICKUP_SPRITE_HEIGHT, 1);
-}
-
 export function makeCatPickup(catId: CatId): THREE.Group {
   const texture = catFrontTextures[catId];
   if (!texture) throw new Error(`Texture pickup gatto mancante: ${catId}`);
   const group = new THREE.Group();
-  const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }),
-  );
-  applyPickupSpriteScale(sprite, texture);
-  sprite.center.set(0.5, 0);
-  group.add(sprite);
+  group.add(makeTexturedPlane(texture, CAT_PICKUP_SPRITE_HEIGHT));
   group.userData.pickupCatId = catId;
   return group;
 }
@@ -134,9 +117,9 @@ export function updatePack(delta: number): void {
   playerRoot.children.forEach((cat) => {
     const catId = cat.userData.catId as CatId;
     const texture = catFrames[catId];
-    const sprite = cat.children[0];
-    if (texture && sprite instanceof THREE.Sprite) {
-      setCatFacing(sprite, texture, facing);
+    const plane = cat.children[0];
+    if (texture && plane instanceof THREE.Mesh) {
+      setCatFacing(plane, texture, facing);
     }
     const phase = Number(cat.userData.phase ?? 0);
     const baseScale = Number(cat.userData.baseScale ?? 1);

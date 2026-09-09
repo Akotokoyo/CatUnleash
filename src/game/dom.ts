@@ -14,10 +14,10 @@ export const ui = {
   newRun: mustElement<HTMLButtonElement>("new-run"),
   restart: mustElement<HTMLButtonElement>("restart"),
   sound: mustElement<HTMLButtonElement>("sound"),
+  pauseMenu: mustElement<HTMLButtonElement>("pause-menu"),
   language: mustElement<HTMLSelectElement>("language"),
   score: mustElement("score"),
   mice: mustElement("mice"),
-  speed: mustElement("speed"),
   tuna: mustElement("tuna"),
   lives: mustElement("lives"),
   finalScore: mustElement("final-score"),
@@ -34,6 +34,7 @@ export function showScreen(mode: ScreenMode): void {
   ui.menu.classList.toggle("hidden", mode !== "menu");
   ui.hud.classList.toggle("hidden", mode !== "hud");
   ui.gameover.classList.toggle("hidden", mode !== "gameover");
+  ui.pauseMenu.classList.toggle("hidden", mode !== "hud");
   canvas.style.pointerEvents = mode === "hud" ? "auto" : "none";
 }
 
@@ -61,5 +62,5 @@ export function hudTargetCenter(el: HTMLElement): { x: number; y: number } {
 
 export function screenFlyCenter(): { x: number; y: number } {
   const rect = canvas.getBoundingClientRect();
-  return { x: rect.left + rect.width * 0.5, y: rect.top + rect.height * 0.44 };
+  return { x: rect.left + rect.width * 0.5, y: rect.top + rect.height * 0.58 };
 }

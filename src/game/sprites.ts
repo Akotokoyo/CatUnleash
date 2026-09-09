@@ -9,6 +9,7 @@ import {
   textureLoader,
   textures,
 } from "./state";
+import { setPugFlyImageUrl } from "./flyFx";
 import { refreshThemedSpritesInScene } from "./sceneRefresh";
 
 async function loadTexture(path: string): Promise<THREE.Texture> {
@@ -54,11 +55,12 @@ async function loadThemeSprites(themeId: EnvironmentTheme["id"]): Promise<ThemeS
       catFront[id] = front;
     }),
   );
-  const [pugIdle, pugBark] = await Promise.all([
+  const [pugIdle, pugBark, pugFlee] = await Promise.all([
     loadTextureWithFallback(themedPugPath(themeId, "carlino_meme.png"), fallbackPugPath("carlino_meme.png")),
     loadTextureWithFallback(themedPugPath(themeId, "carlino_bark.png"), fallbackPugPath("carlino_bark.png")),
+    loadTextureWithFallback(themedPugPath(themeId, "carlino_flee.png"), fallbackPugPath("carlino_flee.png")),
   ]);
-  return { cats, catFront, pugIdle, pugBark };
+  return { cats, catFront, pugIdle, pugBark, pugFlee };
 }
 
 export async function loadAllThemeSprites(): Promise<void> {
@@ -66,6 +68,7 @@ export async function loadAllThemeSprites(): Promise<void> {
     ENVIRONMENTS.map(async (theme) => [theme.id, await loadThemeSprites(theme.id)] as const),
   );
   for (const [themeId, sprites] of sets) themeSpriteCache.set(themeId, sprites);
+  textures.obstacle = await loadTexture("/assets/obstacles/accalappiacani.png");
 }
 
 export function applyThemeSprites(themeId: EnvironmentTheme["id"]): void {
@@ -77,5 +80,7 @@ export function applyThemeSprites(themeId: EnvironmentTheme["id"]): void {
   }
   textures.pugIdle = set.pugIdle;
   textures.pugBark = set.pugBark;
+  textures.pugFlee = set.pugFlee;
+  setPugFlyImageUrl(themedPugPath(themeId, "carlino_flee.png"));
   refreshThemedSpritesInScene();
 }

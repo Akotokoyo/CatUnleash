@@ -18,6 +18,7 @@ const flyTrails: TrailParticle[] = [];
 const flyBursts: BurstParticle[] = [];
 const flyFlashes: FlashParticle[] = [];
 let tunaFlyImageUrl = "";
+let pugFlyImageUrl = "/assets/pugs/carlino_flee.png";
 const MAX_FLY_TRAILS = 18;
 const TRAIL_INTERVAL = 0.048;
 
@@ -43,6 +44,10 @@ function flyTargetPoint(targetEl: HTMLElement): { x: number; y: number } {
 
 export function setTunaFlyImageUrl(url: string): void {
   tunaFlyImageUrl = url;
+}
+
+export function setPugFlyImageUrl(url: string): void {
+  pugFlyImageUrl = url;
 }
 
 export function clearFlyFx(): void {
@@ -77,10 +82,12 @@ export function spawnFlyIcon(
   const via = flyViaPoint();
   const to = flyTargetPoint(targetEl);
   const dist = Math.hypot(from.x - via.x, from.y - via.y) + Math.hypot(via.x - to.x, via.y - to.y);
-  const arc = Math.min(180, dist * 0.22);
+  const goingUp = to.y < from.y;
+  const arc = Math.min(goingUp ? 240 : 180, dist * (goingUp ? 0.3 : 0.22));
   const el = document.createElement("div");
   el.className = `fly-icon fly-icon-${kind}`;
   if (kind === "tuna") el.style.backgroundImage = `url("${tunaFlyImageUrl}")`;
+  if (kind === "pug") el.style.backgroundImage = `url("${pugFlyImageUrl}")`;
   setFlyTransform(el, from.x, from.y, 1.55, 1);
   flyLayer.appendChild(el);
   spawnPickupFlash(from.x, from.y, kind);
