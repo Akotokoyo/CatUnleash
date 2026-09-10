@@ -91,7 +91,7 @@ const PLAYER_Z = 3;
 const MAX_SPEED = 6;
 const LIFE_COST = 200;
 const CAT_COST = 20;
-const CONTINUE_COST = 150;
+const CONTINUE_COST = 1000;
 const SCORE_COIN = 5;
 const SCORE_CAT = 15;
 const SCORE_TUNA = 10;
@@ -800,25 +800,46 @@ function addAnimalAccessory(animal: THREE.Group, kind: AnimalKind, worldIndex: n
   animal.add(accessory);
 }
 
-function rebuildPack(): void {
-  for (const child of playerRoot.children) disposeRuntimeObject(child);
-  playerRoot.clear();
-  const shown = Math.min(catCount, 7);
-  for (let i = 0; i < shown; i += 1) {
-    const cat = makeCat(CAT_COATS[i % CAT_COATS.length]);
-    addAnimalAccessory(cat, "cat", accessoryEnvironmentIndex);
-    if (i === 0) {
-      cat.scale.setScalar(1.12);
-      cat.position.set(0, 0.28, 0);
-    } else {
-      const row = Math.ceil(i / 2);
-      const side = i % 2 === 0 ? 1 : -1;
-      cat.scale.setScalar(Math.max(0.65, 0.9 - row * 0.025));
-      cat.position.set(side * Math.min(row, 3) * 0.58, 0.2, row * 0.95);
-    }
-    cat.userData.phase = i * 0.7;
-    playerRoot.add(cat);
+function layoutPackCat(cat: THREE.Object3D, index: number): void {
+  if (index === 0) {
+    cat.scale.setScalar(1.12);
+    cat.position.x = 0;
+    cat.position.z = 0;
+  } else {
+    const row = Math.ceil(index / 2);
+    const side = index % 2 === 0 ? 1 : -1;
+    cat.scale.setScalar(Math.max(0.65, 0.9 - row * 0.025));
+    cat.position.x = side * Math.min(row, 3) * 0.58;
+    cat.position.z = row * 0.95;
   }
+  cat.userData.phase = index * 0.7;
+}
+
+function addPackCat(index: number): void {
+  const cat = makeCat(CAT_COATS[index % CAT_COATS.length]);
+  addAnimalAccessory(cat, "cat", accessoryEnvironmentIndex);
+  layoutPackCat(cat, index);
+  playerRoot.add(cat);
+}
+
+function rebuildPack(force = false): void {
+  if (force) {
+    while (playerRoot.children.length > 0) {
+      const child = playerRoot.children[playerRoot.children.length - 1];
+      playerRoot.remove(child);
+      disposeRuntimeObject(child);
+    }
+  }
+  const shown = Math.min(catCount, 7);
+  while (playerRoot.children.length > shown) {
+    const child = playerRoot.children[playerRoot.children.length - 1];
+    playerRoot.remove(child);
+    disposeRuntimeObject(child);
+  }
+  while (playerRoot.children.length < shown) {
+    addPackCat(playerRoot.children.length);
+  }
+  playerRoot.children.forEach((cat, index) => layoutPackCat(cat, index));
   playerRoot.position.z = PLAYER_Z;
   ui.cats.textContent = String(catCount);
 }
@@ -2131,7 +2152,7 @@ function syncAccessoriesWithCurrentTrack(): void {
   const currentEnvironment = currentTile?.userData.environmentIndex;
   if (typeof currentEnvironment !== "number" || currentEnvironment === accessoryEnvironmentIndex) return;
   accessoryEnvironmentIndex = currentEnvironment;
-  rebuildPack();
+  rebuildPack(true);
 }
 
 function updatePack(delta: number): void {
