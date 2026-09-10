@@ -16,6 +16,21 @@ type RunState = "menu" | "running" | "gameover";
 type PickupType = "cat" | "tuna" | "dog" | "carrier" | "coin" | "hint";
 type AnimalKind = "cat" | "dog";
 type CollectEffect = Exclude<PickupType, "hint">;
+type CatPattern = "solid" | "tabby" | "bicolor" | "calico";
+type DogPattern = "spaniel" | "solid" | "mask";
+
+interface CatCoat {
+  fur: number;
+  pattern: CatPattern;
+  patch?: number;
+  extra?: number;
+}
+
+interface DogCoat {
+  fur: number;
+  belly: number;
+  pattern: DogPattern;
+}
 
 interface ContinueSnapshot {
   laneIndex: number;
@@ -63,14 +78,46 @@ const LIFE_COST = 200;
 const CAT_COST = 20;
 const CONTINUE_COST = 150;
 const ECONOMY_KEY = "catunleashed-economy";
-const CAT_COLORS = [0xe58a31, 0xf1d28a, 0x57514c, 0xc9613d, 0xe3e0d2];
+const CAT_COATS: CatCoat[] = [
+  { fur: 0xee9a40, pattern: "tabby", patch: 0xd07828 },
+  { fur: 0xf6f1e8, pattern: "solid" },
+  { fur: 0x4a3c36, pattern: "solid" },
+  { fur: 0xde6a38, pattern: "bicolor", patch: 0xf6f1e8 },
+  { fur: 0xc8c2b8, pattern: "tabby", patch: 0x8f8a82 },
+  { fur: 0x2b2a2e, pattern: "solid" },
+  { fur: 0xf6f1e8, pattern: "calico", patch: 0xee9a40, extra: 0x5c4036 },
+  { fur: 0xb0aaa4, pattern: "bicolor", patch: 0xf6f1e8 },
+];
+const DOG_COATS: DogCoat[] = [
+  { fur: 0xc47a3a, belly: 0xf7f2ea, pattern: "solid" },
+  { fur: 0xe0b06a, belly: 0xfff3d8, pattern: "solid" },
+  { fur: 0x5c4036, belly: 0xf0e6d8, pattern: "solid" },
+  { fur: 0xd4a078, belly: 0xf6f1e8, pattern: "solid" },
+  { fur: 0x8a7a70, belly: 0xeee8e0, pattern: "solid" },
+];
 const gold = new THREE.MeshStandardMaterial({ color: 0xe8b83f, roughness: 0.42, metalness: 0.35 });
 const terracotta = new THREE.MeshStandardMaterial({ color: 0xac4f2d, roughness: 0.82 });
 const cream = new THREE.MeshStandardMaterial({ color: 0xf7e3a6, roughness: 0.72 });
 const obsidian = new THREE.MeshStandardMaterial({ color: 0x13201e, roughness: 0.35, metalness: 0.25 });
 const biscuitTan = new THREE.MeshStandardMaterial({ color: 0xb87a3c, roughness: 0.88 });
 const biscuitToasted = new THREE.MeshStandardMaterial({ color: 0x6e3b22, roughness: 0.92 });
-const sharedMaterials = new Set<THREE.Material>([gold, terracotta, cream, obsidian, biscuitTan, biscuitToasted]);
+const ink = new THREE.MeshBasicMaterial({ color: 0x1c1410, side: THREE.BackSide });
+const eyeWhite = new THREE.MeshBasicMaterial({ color: 0xfff6ea });
+const catInk = new THREE.MeshBasicMaterial({ color: 0x2b1c16 });
+const catNose = new THREE.MeshBasicMaterial({ color: 0xe8899a });
+const toonRamp = makeToonRamp();
+const sharedMaterials = new Set<THREE.Material>([
+  gold,
+  terracotta,
+  cream,
+  obsidian,
+  biscuitTan,
+  biscuitToasted,
+  ink,
+  eyeWhite,
+  catInk,
+  catNose,
+]);
 
 const canvas = mustElement<HTMLCanvasElement>("game");
 const mobileRendering =
@@ -338,39 +385,234 @@ function disposeRuntimeObject(root: THREE.Object3D): void {
   });
 }
 
-function makeCat(color = 0xe48b31): THREE.Group {
+function makeToonRamp(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 8;
+  canvas.height = 1;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Canvas 2D non disponibile");
+  const stops = ["#a3a3a3", "#a3a3a3", "#d2d2d2", "#d2d2d2", "#ffffff", "#ffffff", "#ffffff", "#ffffff"];
+  stops.forEach((color, index) => {
+    context.fillStyle = color;
+    context.fillRect(index, 0, 1, 1);
+  });
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = THREE.NearestFilter;
+  return texture;
+}
+
+function toon(color: number): THREE.MeshToonMaterial {
+  return new THREE.MeshToonMaterial({ color, gradientMap: toonRamp });
+}
+
+function addInk(mesh: THREE.Mesh, inflate = 1.08): void {
+  const shell = new THREE.Mesh(mesh.geometry, ink);
+  shell.scale.setScalar(inflate);
+  shell.castShadow = false;
+  shell.receiveShadow = false;
+  mesh.add(shell);
+}
+
+function furLuma(color: number): number {
+  const r = (color >> 16) & 255;
+  const g = (color >> 8) & 255;
+  const b = color & 255;
+  return (r * 0.3 + g * 0.59 + b * 0.11) / 255;
+}
+
+function mixHex(color: number, factor: number): number {
+  const r = Math.max(0, Math.min(255, Math.round(((color >> 16) & 255) * factor)));
+  const g = Math.max(0, Math.min(255, Math.round(((color >> 8) & 255) * factor)));
+  const b = Math.max(0, Math.min(255, Math.round((color & 255) * factor)));
+  return (r << 16) | (g << 8) | b;
+}
+
+function makeKawaiiEarGeometry(scale = 1): THREE.ExtrudeGeometry {
+  const shape = new THREE.Shape();
+  const k = scale;
+  shape.moveTo(0, 0.4 * k);
+  shape.quadraticCurveTo(0.16 * k, 0.2 * k, 0.2 * k, -0.05 * k);
+  shape.quadraticCurveTo(0, -0.1 * k, -0.2 * k, -0.05 * k);
+  shape.quadraticCurveTo(-0.16 * k, 0.2 * k, 0, 0.4 * k);
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: 0.07 * k,
+    bevelEnabled: true,
+    bevelThickness: 0.016,
+    bevelSize: 0.018,
+    bevelSegments: 1,
+    curveSegments: 5,
+  });
+  geometry.translate(0, 0, -0.035 * k);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function addFurPatch(
+  parent: THREE.Group,
+  color: number,
+  x: number,
+  y: number,
+  z: number,
+  sx: number,
+  sy: number,
+  sz: number,
+): void {
+  const patch = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), toon(color));
+  patch.position.set(x, y, z);
+  patch.scale.set(sx, sy, sz);
+  parent.add(patch);
+}
+
+function addChibiFace(
+  parent: THREE.Group,
+  eyeX: number,
+  eyeY: number,
+  faceZ: number,
+  eyeSize: number,
+  nose: "pink" | "black",
+): void {
+  for (const x of [-eyeX, eyeX]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(eyeSize, 12, 10), catInk);
+    eye.scale.set(0.92, 1.08, 0.28);
+    eye.position.set(x, eyeY, faceZ);
+    parent.add(eye);
+    const shine = new THREE.Mesh(new THREE.SphereGeometry(eyeSize * 0.32, 6, 5), eyeWhite);
+    shine.position.set(x - eyeSize * 0.35, eyeY + eyeSize * 0.42, faceZ - 0.05);
+    parent.add(shine);
+    const blush = new THREE.Mesh(new THREE.SphereGeometry(eyeSize * 0.82, 8, 6), toon(0xf4a4b0));
+    blush.scale.set(1.25, 0.55, 0.28);
+    blush.position.set(x * 1.7, eyeY - eyeSize * 1.4, faceZ + 0.1);
+    parent.add(blush);
+  }
+  const noseMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(nose === "pink" ? 0.035 : 0.042, 8, 6),
+    nose === "pink" ? catNose : catInk,
+  );
+  noseMesh.scale.set(1.15, 0.72, 0.8);
+  noseMesh.position.set(0, eyeY - eyeSize * 1.15, faceZ - 0.02);
+  parent.add(noseMesh);
+  for (const x of [-0.038, 0.038]) {
+    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.032, 0.01, 5, 8, Math.PI), catInk);
+    mouth.position.set(x, eyeY - eyeSize * 1.55, faceZ - 0.01);
+    mouth.rotation.set(Math.PI * 0.12, 0, x < 0 ? 0.45 : -0.45);
+    parent.add(mouth);
+  }
+}
+
+function makeCat(coat: CatCoat = CAT_COATS[0]): THREE.Group {
   const cat = new THREE.Group();
-  const fur = new THREE.MeshStandardMaterial({ color, roughness: 0.78 });
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.46, 12, 9), fur);
-  body.scale.set(0.9, 1, 1.35);
-  body.position.y = 0.65;
+  const fur = toon(coat.fur);
+  const innerEar = toon(0xf4a39a);
+  const creamFur = toon(0xf6f1e8);
+  const dark = furLuma(coat.fur) < 0.38;
+  const faceZ = -0.48;
+
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), fur);
+  body.scale.set(1.05, 0.9, 1);
+  body.position.set(0, 0.36, 0.08);
   body.castShadow = true;
+  addInk(body, 1.06);
   cat.add(body);
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 12, 9), fur);
-  head.position.set(0, 1.25, -0.34);
+  const tummy = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 10, 8),
+    coat.pattern === "bicolor" || coat.pattern === "calico" || dark ? creamFur : toon(0xf5e2c4),
+  );
+  tummy.scale.set(0.95, 0.95, 0.42);
+  tummy.position.set(0, 0.36, -0.22);
+  cat.add(tummy);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.52, 14, 12), fur);
+  head.scale.set(1.08, 1, 0.8);
+  head.position.set(0, 1.02, -0.04);
   head.castShadow = true;
+  addInk(head, 1.05);
   cat.add(head);
-  for (const x of [-0.22, 0.22]) {
-    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.42, 4), fur);
-    ear.position.set(x, 1.62, -0.35);
-    ear.rotation.z = x < 0 ? 0.12 : -0.12;
-    cat.add(ear);
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), gold);
-    eye.position.set(x * 0.55, 1.3, -0.71);
-    cat.add(eye);
+
+  if (dark) {
+    const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), creamFur);
+    muzzle.scale.set(1.05, 0.72, 0.55);
+    muzzle.position.set(0, 0.92, -0.28);
+    cat.add(muzzle);
   }
-  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), obsidian);
-  nose.position.set(0, 1.18, -0.74);
+
+  if (coat.pattern === "bicolor" && coat.patch !== undefined) {
+    addFurPatch(cat, coat.patch, 0.22, 1.08, -0.12, 0.95, 0.85, 0.7);
+    addFurPatch(cat, coat.patch, -0.08, 0.38, -0.12, 0.7, 0.7, 0.5);
+  }
+  if (coat.pattern === "calico") {
+    if (coat.patch !== undefined) addFurPatch(cat, coat.patch, 0.24, 1.1, -0.1, 0.9, 0.8, 0.65);
+    if (coat.extra !== undefined) addFurPatch(cat, coat.extra, -0.22, 0.98, -0.16, 0.7, 0.65, 0.55);
+  }
+  if (coat.pattern === "tabby") {
+    const stripe = toon(coat.patch ?? mixHex(coat.fur, 0.78));
+    for (const [x, rot] of [
+      [-0.12, 0.35],
+      [0, 0],
+      [0.12, -0.35],
+    ] as const) {
+      const mark = new THREE.Mesh(new THREE.CapsuleGeometry(0.028, 0.16, 3, 6), stripe);
+      mark.position.set(x, 1.22, -0.4);
+      mark.rotation.z = rot;
+      cat.add(mark);
+    }
+  }
+
+  for (const x of [-0.28, 0.28]) {
+    const earColor =
+      coat.pattern === "bicolor" && coat.patch !== undefined && x > 0 ? toon(coat.patch) : fur;
+    const ear = new THREE.Mesh(makeKawaiiEarGeometry(1), earColor);
+    ear.position.set(x, 1.38, -0.06);
+    ear.rotation.set(-0.18, x < 0 ? 0.18 : -0.18, x < 0 ? 0.42 : -0.42);
+    ear.castShadow = true;
+    addInk(ear, 1.07);
+    cat.add(ear);
+    const pink = new THREE.Mesh(makeKawaiiEarGeometry(0.55), innerEar);
+    pink.position.set(x * 1.02, 1.36, -0.1);
+    pink.rotation.copy(ear.rotation);
+    cat.add(pink);
+  }
+
+  for (const x of [-0.16, 0.16]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), catInk);
+    eye.scale.set(0.82, 1.12, 0.28);
+    eye.position.set(x, 1.04, faceZ);
+    cat.add(eye);
+    const shine = new THREE.Mesh(new THREE.SphereGeometry(0.028, 6, 5), eyeWhite);
+    shine.position.set(x - 0.03, 1.08, faceZ - 0.05);
+    cat.add(shine);
+    const blush = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), toon(0xf2a09a));
+    blush.scale.set(1.15, 0.55, 0.28);
+    blush.position.set(x * 1.55, 0.92, -0.36);
+    cat.add(blush);
+    const whisker = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 5), catInk);
+    whisker.position.set(x * 1.7, 0.94, -0.4);
+    cat.add(whisker);
+  }
+
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), catNose);
+  nose.scale.set(1.2, 0.7, 0.8);
+  nose.position.set(0, 0.94, faceZ - 0.02);
   cat.add(nose);
-  const tail = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.075, 7, 12, Math.PI * 1.35), fur);
-  tail.position.set(0.38, 0.8, 0.55);
-  tail.rotation.set(Math.PI / 2, 0.3, -0.4);
+  for (const x of [-0.035, 0.035]) {
+    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.01, 5, 8, Math.PI), catInk);
+    mouth.position.set(x, 0.9, faceZ - 0.01);
+    mouth.rotation.set(Math.PI * 0.15, 0, x < 0 ? 0.4 : -0.4);
+    cat.add(mouth);
+  }
+
+  const tail = new THREE.Mesh(new THREE.CapsuleGeometry(0.065, 0.42, 4, 8), fur);
+  tail.position.set(0.2, 0.5, 0.42);
+  tail.rotation.set(1.05, 0.35, -0.25);
   tail.name = "tail";
+  addInk(tail, 1.08);
   cat.add(tail);
-  for (const x of [-0.25, 0.25]) {
-    const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.35, 4, 7), fur);
-    leg.position.set(x, 0.28, -0.15);
+
+  for (const x of [-0.14, 0.14]) {
+    const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.1, 4, 8), fur);
+    leg.position.set(x, 0.16, 0);
+    addInk(leg, 1.08);
     cat.add(leg);
   }
   return cat;
@@ -380,11 +622,11 @@ function addAnimalAccessory(animal: THREE.Group, kind: AnimalKind, worldIndex: n
   const worldId = getEnvironment(worldIndex).id;
   const accessory = new THREE.Group();
   accessory.name = "world-accessory";
-  const headY = kind === "cat" ? 1.58 : 1.28;
-  const headZ = kind === "cat" ? -0.34 : -0.4;
-  const faceY = kind === "cat" ? 1.3 : 1.08;
-  const faceZ = kind === "cat" ? -0.75 : -0.74;
-  const size = kind === "cat" ? 1 : 0.86;
+  const headY = kind === "cat" ? 1.46 : 1.42;
+  const headZ = kind === "cat" ? -0.04 : -0.04;
+  const faceY = kind === "cat" ? 1.04 : 1.06;
+  const faceZ = kind === "cat" ? -0.52 : -0.54;
+  const size = kind === "cat" ? 1.08 : 0.9;
 
   if (worldId === "city") {
     const red = new THREE.MeshStandardMaterial({ color: 0xe94f47, roughness: 0.72 });
@@ -459,21 +701,21 @@ function addAnimalAccessory(animal: THREE.Group, kind: AnimalKind, worldIndex: n
       depthWrite: false,
     });
     const helmet = new THREE.Mesh(
-      new THREE.SphereGeometry((kind === "cat" ? 0.55 : 0.47), 12, 8),
+      new THREE.SphereGeometry((kind === "cat" ? 0.62 : 0.52), 12, 8),
       glass,
     );
-    helmet.position.set(0, kind === "cat" ? 1.31 : 1.06, headZ);
+    helmet.position.set(0, kind === "cat" ? 1.12 : 1.02, headZ);
     const ring = new THREE.Mesh(
-      new THREE.TorusGeometry((kind === "cat" ? 0.42 : 0.36), 0.05, 7, 16),
+      new THREE.TorusGeometry((kind === "cat" ? 0.4 : 0.34), 0.05, 7, 16),
       cream,
     );
     ring.rotation.x = Math.PI / 2;
-    ring.position.set(0, kind === "cat" ? 0.98 : 0.78, headZ + 0.04);
+    ring.position.set(0, kind === "cat" ? 0.68 : 0.62, headZ + 0.04);
     const backpack = new THREE.Mesh(
-      new THREE.BoxGeometry(0.52 * size, 0.62 * size, 0.22),
+      new THREE.BoxGeometry(0.42 * size, 0.42 * size, 0.18),
       cream,
     );
-    backpack.position.set(0, kind === "cat" ? 0.78 : 0.6, 0.48);
+    backpack.position.set(0, kind === "cat" ? 0.46 : 0.42, 0.38);
     accessory.add(helmet, ring, backpack);
   } else if (worldId === "egypt") {
     const blue = new THREE.MeshStandardMaterial({ color: 0x225fa8, roughness: 0.6 });
@@ -506,6 +748,15 @@ function addAnimalAccessory(animal: THREE.Group, kind: AnimalKind, worldIndex: n
   accessory.traverse((object) => {
     if (object instanceof THREE.Mesh) object.castShadow = true;
   });
+  const accessoryMeshes: THREE.Mesh[] = [];
+  accessory.traverse((object) => {
+    if (object instanceof THREE.Mesh) accessoryMeshes.push(object);
+  });
+  for (const mesh of accessoryMeshes) {
+    const material = mesh.material;
+    if (Array.isArray(material) || material.transparent) continue;
+    addInk(mesh, 1.07);
+  }
   animal.add(accessory);
 }
 
@@ -514,7 +765,7 @@ function rebuildPack(): void {
   playerRoot.clear();
   const shown = Math.min(catCount, 7);
   for (let i = 0; i < shown; i += 1) {
-    const cat = makeCat(CAT_COLORS[i % CAT_COLORS.length]);
+    const cat = makeCat(CAT_COATS[i % CAT_COATS.length]);
     addAnimalAccessory(cat, "cat", accessoryEnvironmentIndex);
     if (i === 0) {
       cat.scale.setScalar(1.12);
@@ -534,8 +785,8 @@ function rebuildPack(): void {
 
 function makeRecruitCat(): THREE.Group {
   const group = new THREE.Group();
-  const color = CAT_COLORS[Math.floor(Math.random() * CAT_COLORS.length)];
-  const cat = makeCat(color);
+  const coat = CAT_COATS[Math.floor(Math.random() * CAT_COATS.length)];
+  const cat = makeCat(coat);
   cat.rotation.y = Math.PI;
   cat.scale.setScalar(0.92);
   addAnimalAccessory(cat, "cat", accessoryEnvironmentIndex);
@@ -558,7 +809,7 @@ function makeRecruitCat(): THREE.Group {
   });
   const plusVertical = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.58, 0.1), plusMaterial);
   const plusHorizontal = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.13, 0.1), plusMaterial);
-  plusVertical.position.set(0, 1.95, 0);
+  plusVertical.position.set(0, 2.12, 0);
   plusHorizontal.position.copy(plusVertical.position);
   group.add(plusVertical, plusHorizontal);
   return group;
@@ -566,20 +817,44 @@ function makeRecruitCat(): THREE.Group {
 
 function makeTuna(): THREE.Group {
   const group = new THREE.Group();
-  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.48, 0.55, 18), terracotta);
-  can.position.y = 0.53;
+  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.42, 18), toon(0xd45c3c));
+  can.position.y = 0.42;
   can.castShadow = true;
+  addInk(can, 1.05);
   group.add(can);
-  for (const y of [0.24, 0.82]) {
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.055, 7, 18), gold);
+  const label = new THREE.Mesh(new THREE.CylinderGeometry(0.405, 0.405, 0.2, 18), toon(0xf2d36a));
+  label.position.y = 0.42;
+  group.add(label);
+  for (const y of [0.22, 0.62]) {
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.045, 7, 18), gold);
     rim.position.y = y;
     rim.rotation.x = Math.PI / 2;
+    addInk(rim, 1.1);
     group.add(rim);
   }
-  const fish = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.48, 3), cream);
-  fish.position.set(0, 0.54, -0.49);
-  fish.rotation.z = Math.PI / 2;
+  const fish = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), toon(0xf7e7c8));
+  fish.scale.set(1.45, 0.85, 0.7);
+  fish.position.set(0, 0.44, -0.38);
+  fish.castShadow = true;
+  addInk(fish, 1.06);
   group.add(fish);
+  const tail = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), toon(0xf0c48a));
+  tail.scale.set(0.45, 1.15, 0.85);
+  tail.position.set(0, 0.44, -0.62);
+  addInk(tail, 1.08);
+  group.add(tail);
+  for (const x of [-0.08, 0.08]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), catInk);
+    eye.scale.set(0.9, 1.05, 0.3);
+    eye.position.set(x, 0.48, -0.52);
+    group.add(eye);
+    const shine = new THREE.Mesh(new THREE.SphereGeometry(0.015, 6, 5), eyeWhite);
+    shine.position.set(x - 0.015, 0.5, -0.56);
+    group.add(shine);
+  }
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.024, 6, 5), catNose);
+  nose.position.set(0, 0.42, -0.54);
+  group.add(nose);
   return group;
 }
 
@@ -617,6 +892,7 @@ function makeCoin(): THREE.Group {
   if (lift) geometry.translate(0, lift, 0);
   const cookie = new THREE.Mesh(geometry, biscuitTan);
   cookie.castShadow = true;
+  addInk(cookie, 1.06);
   group.add(cookie);
 
   const addPrint = (x: number, y: number, radius: number, scaleX: number, scaleY: number): void => {
@@ -670,18 +946,20 @@ function makePathHint(): THREE.Group {
 
 function makeCarrier(): THREE.Group {
   const group = new THREE.Group();
-  const upperMaterial = new THREE.MeshStandardMaterial({ color: 0xdce5e5, roughness: 0.7, flatShading: true });
-  const lowerMaterial = new THREE.MeshStandardMaterial({ color: 0x4a5255, roughness: 0.78, flatShading: true });
-  const metal = new THREE.MeshStandardMaterial({ color: 0x252c2e, roughness: 0.38, metalness: 0.62 });
-  const gridMetal = new THREE.MeshStandardMaterial({ color: 0xd6dfdd, roughness: 0.28, metalness: 0.78 });
+  const upperMaterial = toon(0xdce5e5);
+  const lowerMaterial = toon(0x4a5255);
+  const metal = toon(0x252c2e);
+  const gridMetal = toon(0xd6dfdd);
   const base = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.72, 1.65), lowerMaterial);
   base.position.y = 0.38;
   base.castShadow = true;
+  addInk(base, 1.04);
   group.add(base);
 
   const shell = new THREE.Mesh(makeTaperedCarrierShell(), upperMaterial);
   shell.position.y = 0.68;
   shell.castShadow = true;
+  addInk(shell, 1.04);
   group.add(shell);
   const topPanel = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.07, 0.92), upperMaterial);
   topPanel.position.set(0, 1.73, 0.04);
@@ -714,22 +992,24 @@ function makeCarrier(): THREE.Group {
     group.add(frame);
   }
   for (const x of [-0.72, 0.72]) {
-    for (const z of [-0.34, -0.1, 0.14, 0.38]) {
-      const vent = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.48, 0.075), metal);
-      vent.position.set(x, 1.28, z);
+    for (const z of [-0.18, 0.18]) {
+      const vent = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.4, 0.075), metal);
+      vent.position.set(x, 1.24, z);
       group.add(vent);
     }
   }
 
-  for (const x of [-0.28, 0.28]) {
-    const support = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.28, 0.1), metal);
-    support.position.set(x, 1.88, 0.05);
-    group.add(support);
-  }
-  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.1, 0.14), metal);
-  handle.position.set(0, 2.01, 0.05);
+  const paw = new THREE.Mesh(new THREE.CircleGeometry(0.16, 12), toon(0xf0b7c4));
+  paw.position.set(0.82, 1.12, 0);
+  paw.rotation.y = Math.PI / 2;
+  group.add(paw);
+
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.045, 8, 16, Math.PI), metal);
+  handle.position.set(0, 1.92, 0.05);
+  handle.rotation.x = Math.PI;
+  addInk(handle, 1.08);
   group.add(handle);
-  const latch = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.24, 0.12), gold);
+  const latch = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), gold);
   latch.position.set(0.53, 1.08, 0.91);
   group.add(latch);
   group.scale.setScalar(0.9);
@@ -767,56 +1047,96 @@ function makeTaperedCarrierShell(): THREE.BufferGeometry {
   return geometry;
 }
 
+function makeDog(coat: DogCoat = DOG_COATS[0]): THREE.Group {
+  const dog = new THREE.Group();
+  const fur = toon(coat.fur);
+  const belly = toon(coat.belly);
+  const innerEar = toon(0xf4a39a);
+
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 10), fur);
+  body.scale.set(1, 0.9, 1.15);
+  body.position.set(0, 0.4, 0.08);
+  body.castShadow = true;
+  addInk(body, 1.04);
+  dog.add(body);
+
+  const tummy = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), belly);
+  tummy.scale.set(1, 0.95, 0.4);
+  tummy.position.set(0, 0.38, -0.22);
+  dog.add(tummy);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.44, 14, 12), fur);
+  head.position.set(0, 1.0, -0.1);
+  head.castShadow = true;
+  addInk(head, 1.04);
+  dog.add(head);
+
+  for (const x of [-0.46, 0.46]) {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), fur);
+    ear.scale.set(0.7, 1.5, 0.45);
+    ear.position.set(x, 0.78, 0);
+    ear.rotation.z = x < 0 ? 0.28 : -0.28;
+    ear.castShadow = true;
+    dog.add(ear);
+    const pink = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), innerEar);
+    pink.scale.set(0.55, 1.2, 0.28);
+    pink.position.set(x * 0.92, 0.76, -0.12);
+    pink.rotation.z = ear.rotation.z;
+    dog.add(pink);
+  }
+
+  const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), belly);
+  muzzle.scale.set(1.2, 0.78, 1.2);
+  muzzle.position.set(0, 0.84, -0.4);
+  dog.add(muzzle);
+
+  for (const x of [-0.14, 0.14]) {
+    const white = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), eyeWhite);
+    white.scale.set(1, 1.12, 0.42);
+    white.position.set(x, 1.02, -0.46);
+    dog.add(white);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.052, 8, 6), catInk);
+    pupil.position.set(x, 1.01, -0.52);
+    dog.add(pupil);
+    const shine = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 5), eyeWhite);
+    shine.position.set(x - 0.025, 1.05, -0.56);
+    dog.add(shine);
+  }
+
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.058, 8, 6), catInk);
+  nose.scale.set(1.25, 0.85, 0.9);
+  nose.position.set(0, 0.82, -0.62);
+  dog.add(nose);
+
+  for (const x of [-0.15, 0.15]) {
+    for (const z of [-0.14, 0.22]) {
+      const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.12, 4, 8), fur);
+      leg.position.set(x, 0.16, z);
+      addInk(leg, 1.05);
+      dog.add(leg);
+    }
+  }
+
+  const tail = new THREE.Mesh(new THREE.CapsuleGeometry(0.065, 0.28, 4, 8), fur);
+  tail.position.set(0.16, 0.5, 0.46);
+  tail.rotation.set(0.85, 0.3, -0.15);
+  tail.name = "tail";
+  addInk(tail, 1.05);
+  dog.add(tail);
+  return dog;
+}
+
 function makeDogPack(strength: number): THREE.Group {
   const group = new THREE.Group();
-  const dogColors = [0x9a6744, 0xd09a58, 0x5e514b, 0xc4785b, 0xe1c18d];
   for (let i = 0; i < Math.min(strength, 5); i += 1) {
-    const dog = new THREE.Group();
-    const fur = new THREE.MeshStandardMaterial({
-      color: dogColors[i % dogColors.length],
-      roughness: 0.85,
-    });
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.4, 11, 8), fur);
-    body.scale.set(0.9, 0.9, 1.35);
-    body.position.y = 0.58;
-    body.castShadow = true;
-    dog.add(body);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 11, 8), fur);
-    head.position.set(0, 1.02, -0.42);
-    dog.add(head);
-    const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.17, 9, 7), cream);
-    muzzle.scale.set(1, 0.72, 1.2);
-    muzzle.position.set(0, 0.93, -0.69);
-    dog.add(muzzle);
-    for (const x of [-0.26, 0.26]) {
-      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.42, 5), fur);
-      ear.position.set(x, 1.27, -0.37);
-      ear.rotation.z = x < 0 ? 0.45 : -0.45;
-      dog.add(ear);
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.038, 7, 5), obsidian);
-      eye.scale.z = 0.3;
-      eye.position.set(x * 0.5, 1.08, -0.735);
-      dog.add(eye);
-      for (const z of [-0.18, 0.32]) {
-        const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.34, 4, 7), fur);
-        leg.position.set(x, 0.25, z);
-        dog.add(leg);
-      }
-    }
-    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.065, 7, 5), obsidian);
-    nose.position.set(0, 0.96, -0.86);
-    dog.add(nose);
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.65, 7), fur);
-    tail.position.set(0.35, 0.78, 0.52);
-    tail.rotation.z = -0.82;
-    dog.add(tail);
+    const dog = makeDog(DOG_COATS[i % DOG_COATS.length]);
     addAnimalAccessory(dog, "dog", accessoryEnvironmentIndex);
     dog.rotation.y = Math.PI;
-    dog.position.set((i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.55, 0.08, Math.floor(i / 2) * 0.75);
+    dog.position.set((i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.82, 0.08, Math.floor(i / 2) * 0.8);
     group.add(dog);
   }
   const badge = makeBadge(`−${strength}`);
-  badge.position.set(0, 1.8, 0);
+  badge.position.set(0, 2.15, 0);
   group.add(badge);
   return group;
 }
@@ -826,20 +1146,20 @@ function makeBadge(value: string | number): THREE.Sprite {
   badgeCanvas.width = badgeCanvas.height = 128;
   const context = badgeCanvas.getContext("2d");
   if (!context) throw new Error("Canvas 2D non disponibile");
-  context.fillStyle = "#9f321f";
+  context.fillStyle = "#e45b4a";
   context.beginPath();
   context.arc(64, 64, 54, 0, Math.PI * 2);
   context.fill();
-  context.strokeStyle = "#f1c44c";
+  context.strokeStyle = "#2b1c16";
   context.lineWidth = 10;
   context.stroke();
-  context.fillStyle = "#fff5bd";
-  context.font = "bold 62px sans-serif";
+  context.fillStyle = "#fff8ee";
+  context.font = "bold 58px sans-serif";
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.fillText(String(value), 64, 68);
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(badgeCanvas) }));
-  sprite.scale.set(1.25, 1.25, 1);
+  sprite.scale.set(1.15, 1.15, 1);
   return sprite;
 }
 
