@@ -77,6 +77,10 @@ const MAX_SPEED = 6;
 const LIFE_COST = 200;
 const CAT_COST = 20;
 const CONTINUE_COST = 150;
+const SCORE_COIN = 5;
+const SCORE_CAT = 15;
+const SCORE_TUNA = 10;
+const SCORE_DOG = -20;
 const ECONOMY_KEY = "catunleashed-economy";
 const CAT_COATS: CatCoat[] = [
   { fur: 0xee9a40, pattern: "tabby", patch: 0xd07828 },
@@ -1378,7 +1382,7 @@ function returnToMenu(): void {
 }
 
 function scoreValue(): number {
-  return Math.floor(distance * 10 + killScore);
+  return Math.max(0, Math.floor(distance * 10 + killScore));
 }
 
 function clearObjects(): void {
@@ -1638,6 +1642,7 @@ function collect(object: RunnerObject): void {
   spawnScreenSparkles(type);
   if (type === "coin") {
     wallet += 1;
+    killScore += SCORE_COIN;
     audio.pickup(true);
     updateWalletUi();
     saveEconomy();
@@ -1646,7 +1651,7 @@ function collect(object: RunnerObject): void {
   }
   if (object.type === "cat") {
     catCount += 1;
-    killScore += 25;
+    killScore += SCORE_CAT;
     rebuildPack();
     audio.meow();
     showToast(t("toast.cat"), "cat");
@@ -1654,7 +1659,7 @@ function collect(object: RunnerObject): void {
   }
   if (object.type === "tuna") {
     tunaCount += 1;
-    killScore += 20;
+    killScore += SCORE_TUNA;
     audio.pickup();
     if (tunaCount >= 20) {
       tunaCount -= 20;
@@ -1675,13 +1680,13 @@ function collect(object: RunnerObject): void {
   }
 
   audio.bark();
+  killScore += SCORE_DOG;
   if (catCount > object.strength) {
     catCount -= object.strength;
     dogsDefeated += object.strength;
-    killScore += object.strength * 85;
     rebuildPack();
     audio.victory();
-    showToast(t("toast.battle", { score: object.strength * 85, cats: object.strength }), "dog");
+    showToast(t("toast.battle", { cats: object.strength }), "dog");
   } else {
     loseLife();
   }
