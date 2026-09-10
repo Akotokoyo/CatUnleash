@@ -324,6 +324,51 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 
 .menu-button:active { transform: translateY(2px); }
 
+.tutorial-replay { margin-top: 8px; }
+
+#tutorial {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+}
+
+.tutorial-card {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 12px 14px;
+  color: #fff6d4;
+  background: #0c2c2af2;
+  border: 2px solid #d6a53a;
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 2px #28685c, 0 8px 22px #0008;
+}
+
+#tutorial-text {
+  flex: 1;
+  margin: 0;
+  font: 800 16px/1.25 "Baloo 2", sans-serif;
+  text-align: left;
+}
+
+#tutorial-skip {
+  pointer-events: auto;
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  color: #1a2418;
+  font: 800 13px "Baloo 2", sans-serif;
+  letter-spacing: .06em;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(#ffe27a, #d7a93b);
+  cursor: pointer;
+}
+
 .instructions {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -619,6 +664,17 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
   .result-row { gap: 8px 12px; margin-bottom: 10px; font-size: 12px; }
 
   .menu-button { margin-top: 10px; font-size: 13px; }
+
+  .tutorial-card {
+    left: 8px;
+    right: 8px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    padding: 8px 8px 8px 10px;
+    gap: 8px;
+  }
+
+  #tutorial-text { font-size: 13px; }
+  #tutorial-skip { padding: 6px 9px; font-size: 11px; }
 
   #sound {
     right: 8px;

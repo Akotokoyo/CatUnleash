@@ -36,6 +36,7 @@
         <h1>CAT<span>UNLEASHED</span></h1>
         <p class="tagline" data-i18n="menu.tagline">Build the pack. Rule every world.</p>
         <button id="play" class="sun-button" type="button" data-i18n="menu.play">PLAY</button>
+        <button id="tutorial-replay" class="menu-button tutorial-replay" type="button" data-i18n="menu.tutorial">TUTORIAL</button>
         <div class="shop">
           <div class="shop-wallet">
             <span class="coin-icon" aria-hidden="true"></span>
@@ -89,6 +90,12 @@
       </section>
 
       <button id="sound" type="button" aria-label="Toggle sound">♪</button>
+      <div id="tutorial" class="hidden">
+        <div class="tutorial-card">
+          <p id="tutorial-text"></p>
+          <button id="tutorial-skip" type="button" data-i18n="tutorial.skip">SKIP</button>
+        </div>
+      </div>
       <div id="collect-fx" aria-hidden="true"></div>
       <div id="toast" role="status"></div>
     </main>

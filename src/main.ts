@@ -14,6 +14,7 @@ import { translate, translations, type Language, type TranslationKey } from "./i
 
 type RunState = "menu" | "running" | "gameover";
 type PickupType = "cat" | "tuna" | "dog" | "carrier" | "coin" | "hint" | "letter";
+type TutorialStep = "move" | "jump" | "coins" | "cat" | "dog" | "tuna" | "carrier";
 type AnimalKind = "cat" | "dog";
 type CollectEffect = Exclude<PickupType, "hint">;
 type CatPattern = "solid" | "tabby" | "bicolor" | "calico";
@@ -172,6 +173,10 @@ const ui = {
   collectFx: mustElement("collect-fx"),
   toast: mustElement("toast"),
   wordTrack: mustElement("word-track"),
+  tutorial: mustElement("tutorial"),
+  tutorialText: mustElement("tutorial-text"),
+  tutorialSkip: mustElement<HTMLButtonElement>("tutorial-skip"),
+  tutorialReplay: mustElement<HTMLButtonElement>("tutorial-replay"),
 };
 
 const renderer = new THREE.WebGLRenderer({
@@ -255,6 +260,14 @@ let runWord = WORD_POOL[0];
 let letterCollected: boolean[] = [];
 let letterPending = false;
 let letterDelay = 0;
+let tutorialDone = false;
+let tutorialActive = false;
+let tutorialStep: TutorialStep = "move";
+let tutorialArmed = false;
+let tutorialDelay = 0;
+let pendingTutorialStep: TutorialStep | undefined;
+let tutorialFinishPending = false;
+const TUTORIAL_STEPS: TutorialStep[] = ["move", "jump", "coins", "cat", "dog", "tuna", "carrier"];
 
 loadEconomy();
 setEnvironment(0);
@@ -287,6 +300,7 @@ function applyLanguage(): void {
   refreshShopUi();
   updateWalletUi();
   updateWordHud();
+  if (tutorialActive) setTutorialPrompt();
 }
 
 function setEnvironment(index: number): void {
@@ -1371,6 +1385,187 @@ function updateWordHud(): void {
   );
 }
 
+function setTutorialPrompt(): void {
+  const keys: Record<TutorialStep, TranslationKey> = {
+    move: "tutorial.move",
+    jump: "tutorial.jump",
+    coins: "tutorial.coins",
+    cat: "tutorial.cat",
+    dog: "tutorial.dog",
+    tuna: "tutorial.tuna",
+    carrier: "tutorial.carrier",
+  };
+  ui.tutorialText.textContent = t(keys[tutorialStep]);
+}
+
+function setTutorialStep(step: TutorialStep): void {
+  tutorialStep = step;
+  tutorialArmed = false;
+  tutorialDelay = step === "move" ? 0 : 0.7;
+  pendingTutorialStep = undefined;
+  setTutorialPrompt();
+}
+
+function spawnTutorialLesson(): void {
+  const far = -84;
+  const lane = laneIndex;
+  if (tutorialStep === "move") return;
+  if (tutorialStep === "jump") {
+    spawnObject("letter", lane, 0, far, { glyph: "A", letterIndex: 0 });
+    return;
+  }
+  if (tutorialStep === "coins") {
+    spawnObject("hint", lane, 0, far + 10);
+    for (let index = 0; index < 5; index += 1) {
+      spawnObject("coin", lane, 0, far - index * 5.4);
+    }
+    return;
+  }
+  if (tutorialStep === "cat") {
+    spawnObject("hint", lane, 0, far + 10);
+    spawnObject("cat", lane, 0, far);
+    return;
+  }
+  if (tutorialStep === "dog") {
+    spawnObject("dog", lane, 1, far);
+    return;
+  }
+  if (tutorialStep === "tuna") {
+    spawnObject("hint", lane, 0, far + 10);
+    spawnObject("tuna", lane, 0, far);
+    return;
+  }
+  spawnObject("hint", lane, 0, far + 10);
+  spawnObject("carrier", lane, 0, far);
+}
+
+function tutorialNeedType(): PickupType | undefined {
+  if (tutorialStep === "jump") return "letter";
+  if (tutorialStep === "coins") return "coin";
+  if (tutorialStep === "cat") return "cat";
+  if (tutorialStep === "dog") return "dog";
+  if (tutorialStep === "tuna") return "tuna";
+  if (tutorialStep === "carrier") return "carrier";
+  return undefined;
+}
+
+function updateTutorial(delta: number): void {
+  if (!tutorialActive) return;
+  if (tutorialFinishPending) {
+    tutorialFinishPending = false;
+    finishTutorial();
+    return;
+  }
+  if (pendingTutorialStep) {
+    const next = pendingTutorialStep;
+    pendingTutorialStep = undefined;
+    clearObjects();
+    setTutorialStep(next);
+  }
+  if (!tutorialArmed) {
+    tutorialDelay -= delta;
+    if (tutorialDelay > 0) return;
+    spawnTutorialLesson();
+    tutorialArmed = true;
+    return;
+  }
+  const need = tutorialNeedType();
+  if (need && !objects.some((object) => object.type === need)) {
+    tutorialArmed = false;
+    tutorialDelay = 0.7;
+  }
+}
+
+function advanceTutorial(): void {
+  const index = TUTORIAL_STEPS.indexOf(tutorialStep);
+  if (index < 0 || index >= TUTORIAL_STEPS.length - 1) return;
+  pendingTutorialStep = TUTORIAL_STEPS[index + 1];
+}
+
+function hideTutorialUi(): void {
+  tutorialActive = false;
+  tutorialArmed = false;
+  ui.tutorial.classList.add("hidden");
+  ui.wordTrack.classList.remove("hidden");
+}
+
+function skipTutorial(): void {
+  if (!tutorialActive) return;
+  tutorialDone = true;
+  saveEconomy();
+  hideTutorialUi();
+  returnToMenu();
+}
+
+function completeTutorial(): void {
+  tutorialFinishPending = true;
+}
+
+function finishTutorial(): void {
+  tutorialDone = true;
+  saveEconomy();
+  hideTutorialUi();
+  audio.victory();
+  returnToMenu();
+  showToast(t("tutorial.done"));
+}
+
+function startRun(asTutorial = false): void {
+  continueSnapshot = undefined;
+  clearObjects();
+  state = "running";
+  tutorialActive = asTutorial;
+  laneIndex = 1;
+  targetX = LANES[laneIndex];
+  if (asTutorial) {
+    catCount = 1;
+    extraLives = 0;
+    runWord = "";
+    letterCollected = [];
+    letterPending = false;
+    letterDelay = 0;
+    updateWordHud();
+    ui.wordTrack.classList.add("hidden");
+    ui.tutorial.classList.remove("hidden");
+    pendingTutorialStep = undefined;
+    tutorialFinishPending = false;
+    setTutorialStep("move");
+  } else {
+    catCount = 1 + purchasedCats;
+    purchasedCats = 0;
+    extraLives = bankedLives;
+    pickRunWord();
+    ui.wordTrack.classList.remove("hidden");
+    ui.tutorial.classList.add("hidden");
+  }
+  distance = 0;
+  killScore = 0;
+  dogsDefeated = 0;
+  tunaCount = 0;
+  lastHintLane = 1;
+  kibblePauseWaves = 0;
+  level = 1;
+  spawnTravel = 0;
+  nextSpawn = 20;
+  runTime = 0;
+  stridePhase = 0;
+  invulnerableUntil = 0;
+  jumpY = 0;
+  jumpVelocity = 0;
+  playerRoot.position.y = 0;
+  saveEconomy();
+  setEnvironment(0);
+  rebuildPack();
+  updateResourceHud();
+  refreshShopUi();
+  playerRoot.position.x = targetX;
+  ui.menu.classList.add("hidden");
+  ui.gameover.classList.add("hidden");
+  ui.hud.classList.remove("hidden");
+  audio.start();
+  if (!asTutorial) showToast(t("toast.run"));
+}
+
 function tryJump(): void {
   if (state !== "running" || jumpY > 0.04) return;
   jumpVelocity = JUMP_VELOCITY;
@@ -1389,50 +1584,15 @@ function updateJump(delta: number): void {
   playerRoot.position.y = jumpY;
 }
 
-function startRun(): void {
-  continueSnapshot = undefined;
-  clearObjects();
-  state = "running";
-  laneIndex = 1;
-  targetX = LANES[laneIndex];
-  catCount = 1 + purchasedCats;
-  purchasedCats = 0;
-  distance = 0;
-  killScore = 0;
-  dogsDefeated = 0;
-  tunaCount = 0;
-  extraLives = bankedLives;
-  lastHintLane = 1;
-  kibblePauseWaves = 0;
-  level = 1;
-  spawnTravel = 0;
-  nextSpawn = 20;
-  runTime = 0;
-  stridePhase = 0;
-  invulnerableUntil = 0;
-  jumpY = 0;
-  jumpVelocity = 0;
-  playerRoot.position.y = 0;
-  pickRunWord();
-  saveEconomy();
-  setEnvironment(0);
-  rebuildPack();
-  updateResourceHud();
-  refreshShopUi();
-  playerRoot.position.x = targetX;
-  ui.menu.classList.add("hidden");
-  ui.gameover.classList.add("hidden");
-  ui.hud.classList.remove("hidden");
-  audio.start();
-  showToast(t("toast.run"));
-}
-
 function continueRun(): void {
   const snapshot = continueSnapshot;
   if (!snapshot || !spendCoins(CONTINUE_COST)) return;
   continueSnapshot = undefined;
   clearObjects();
   state = "running";
+  tutorialActive = false;
+  ui.tutorial.classList.add("hidden");
+  ui.wordTrack.classList.remove("hidden");
   laneIndex = snapshot.laneIndex;
   targetX = LANES[laneIndex];
   catCount = Math.max(1, snapshot.catCount);
@@ -1466,6 +1626,7 @@ function continueRun(): void {
 }
 
 function endRun(): void {
+  hideTutorialUi();
   state = "gameover";
   ui.hud.classList.add("hidden");
   ui.finalScore.textContent = String(scoreValue());
@@ -1478,6 +1639,7 @@ function endRun(): void {
 
 function returnToMenu(): void {
   continueSnapshot = undefined;
+  hideTutorialUi();
   state = "menu";
   clearObjects();
   setEnvironment(0);
@@ -1509,6 +1671,7 @@ function clearObjects(): void {
 
 function removeRunnerObject(index: number): void {
   const object = objects[index];
+  if (!object) return;
   objectRoot.remove(object.mesh);
   disposeRuntimeObject(object.mesh);
   objects.splice(index, 1);
@@ -1516,13 +1679,19 @@ function removeRunnerObject(index: number): void {
 
 function shiftLane(direction: number): void {
   if (state !== "running") return;
+  const previous = laneIndex;
   laneIndex = THREE.MathUtils.clamp(laneIndex + direction, 0, LANES.length - 1);
   targetX = LANES[laneIndex];
+  if (tutorialActive && tutorialStep === "move" && laneIndex !== previous) {
+    advanceTutorial();
+  }
 }
 
 function bindControls(): void {
-  ui.play.addEventListener("click", startRun);
-  ui.restart.addEventListener("click", startRun);
+  ui.play.addEventListener("click", () => startRun(!tutorialDone));
+  ui.tutorialReplay.addEventListener("click", () => startRun(true));
+  ui.tutorialSkip.addEventListener("click", skipTutorial);
+  ui.restart.addEventListener("click", () => startRun(false));
   ui.continueRun.addEventListener("click", continueRun);
   ui.backMenu.addEventListener("click", returnToMenu);
   ui.buyLife.addEventListener("click", () => buyUpgrade("life"));
@@ -1547,13 +1716,13 @@ function bindControls(): void {
       event.preventDefault();
       if (state === "running") tryJump();
       else if (!(event.target instanceof HTMLButtonElement || event.target instanceof HTMLSelectElement)) {
-        startRun();
+        startRun(!tutorialDone);
       }
       return;
     }
     if (event.key === "Enter" && state !== "running") {
       if (event.target instanceof HTMLButtonElement || event.target instanceof HTMLSelectElement) return;
-      startRun();
+      startRun(!tutorialDone);
     }
   });
   canvas.addEventListener("pointerdown", (event) => {
@@ -1636,7 +1805,9 @@ function update(time: number): void {
 
   if (state === "running") {
     runTime += delta;
-    const speed = 12 * Math.min(MAX_SPEED, Math.pow(1 + runTime / 45, 1.25));
+    const speed = tutorialActive
+      ? 11
+      : 12 * Math.min(MAX_SPEED, Math.pow(1 + runTime / 45, 1.25));
     const travel = speed * delta;
     stridePhase += delta * speed * 0.34;
     distance += travel * 0.34;
@@ -1644,17 +1815,19 @@ function update(time: number): void {
     moveWorld(travel);
     updatePack(delta);
     updateObjects(travel, delta);
-    if (spawnTravel >= nextSpawn) {
+    if (tutorialActive) {
+      updateTutorial(delta);
+    } else if (spawnTravel >= nextSpawn) {
       spawnTravel = 0;
       nextSpawn = THREE.MathUtils.randFloat(21, 29);
       spawnWave();
     }
-    if (letterPending) {
+    if (!tutorialActive && letterPending) {
       letterDelay -= delta;
       if (letterDelay <= 0) spawnLetter();
     }
     const nextLevel = Math.floor(distance / 250) + 1;
-    if (nextLevel > level) {
+    if (!tutorialActive && nextLevel > level) {
       level = nextLevel;
       beginEnvironmentTransition(level - 1);
       scheduleLetterForLevel();
@@ -1776,7 +1949,7 @@ function updateObjects(travel: number, delta: number): void {
         continue;
       }
       const airborne = jumpY >= 0.85;
-      if (object.type === "dog" && airborne) continue;
+      if (object.type === "dog" && airborne && !tutorialActive) continue;
       const hazard = object.type === "dog" || object.type === "carrier";
       if (!(hazard && runTime < invulnerableUntil)) collect(object);
       removeRunnerObject(i);
@@ -1791,6 +1964,12 @@ function collect(object: RunnerObject): void {
   if (type === "hint") return;
   spawnScreenSparkles(type);
   if (type === "letter") {
+    if (tutorialActive && tutorialStep === "jump") {
+      audio.pickup(true);
+      showToast(t("toast.letter", { letter: object.glyph ?? "A" }), "letter");
+      advanceTutorial();
+      return;
+    }
     const index = object.letterIndex ?? -1;
     if (index >= 0 && index < letterCollected.length && !letterCollected[index]) {
       letterCollected[index] = true;
@@ -1814,6 +1993,7 @@ function collect(object: RunnerObject): void {
     updateWalletUi();
     saveEconomy();
     showToast(t("toast.coin"), "coin");
+    if (tutorialActive && tutorialStep === "coins") advanceTutorial();
     return;
   }
   if (object.type === "cat") {
@@ -1822,6 +2002,7 @@ function collect(object: RunnerObject): void {
     rebuildPack();
     audio.meow();
     showToast(t("toast.cat"), "cat");
+    if (tutorialActive && tutorialStep === "cat") advanceTutorial();
     return;
   }
   if (object.type === "tuna") {
@@ -1837,9 +2018,14 @@ function collect(object: RunnerObject): void {
       showToast(t("toast.tuna", { count: tunaCount }), "tuna");
     }
     updateResourceHud();
+    if (tutorialActive && tutorialStep === "tuna") advanceTutorial();
     return;
   }
   if (object.type === "carrier") {
+    if (tutorialActive) {
+      completeTutorial();
+      return;
+    }
     audio.gameOver();
     showToast(t("toast.carrier"), "carrier");
     loseLife();
@@ -1854,12 +2040,23 @@ function collect(object: RunnerObject): void {
     rebuildPack();
     audio.victory();
     showToast(t("toast.battle", { cats: object.strength }), "dog");
+    if (tutorialActive && tutorialStep === "dog") advanceTutorial();
+  } else if (tutorialActive) {
+    catCount = Math.max(2, catCount);
+    rebuildPack();
+    showToast(t("tutorial.dogRetry"), "dog");
   } else {
     loseLife();
   }
 }
 
 function loseLife(): void {
+  if (tutorialActive) {
+    catCount = Math.max(1, catCount);
+    rebuildPack();
+    invulnerableUntil = runTime + 1.5;
+    return;
+  }
   if (extraLives <= 0) {
     continueSnapshot = {
       laneIndex,
@@ -1904,11 +2101,18 @@ function loadEconomy(): void {
   try {
     const raw = localStorage.getItem(ECONOMY_KEY);
     if (!raw) return;
-    const saved = JSON.parse(raw) as { coins?: number; lives?: number; cats?: number; language?: string };
+    const saved = JSON.parse(raw) as {
+      coins?: number;
+      lives?: number;
+      cats?: number;
+      language?: string;
+      tutorialDone?: boolean;
+    };
     wallet = Math.max(0, Math.floor(Number(saved.coins) || 0));
     bankedLives = Math.max(0, Math.floor(Number(saved.lives) || 0));
     purchasedCats = Math.max(0, Math.floor(Number(saved.cats) || 0));
     language = isLanguage(saved.language) ? saved.language : "en";
+    tutorialDone = Boolean(saved.tutorialDone);
   } catch {
     wallet = 0;
     bankedLives = 0;
@@ -1923,6 +2127,7 @@ function saveEconomy(): void {
     lives: bankedLives,
     cats: purchasedCats,
     language,
+    tutorialDone,
   }));
 }
 
