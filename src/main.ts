@@ -194,6 +194,11 @@ const ui = {
   achievementToast: mustElement("achievement-toast"),
   achievementTitle: mustElement("achievement-title"),
   achievementDesc: mustElement("achievement-desc"),
+  pause: mustElement<HTMLButtonElement>("pause"),
+  pauseMenu: mustElement("pause-menu"),
+  pauseResume: mustElement<HTMLButtonElement>("pause-resume"),
+  pauseQuit: mustElement<HTMLButtonElement>("pause-quit"),
+  countdown: mustElement("countdown"),
 };
 
 const renderer = new THREE.WebGLRenderer({
@@ -271,6 +276,8 @@ let transitionTilesRemaining = 0;
 let environmentTransition: EnvironmentTransition | undefined;
 let language: Language = "en";
 let lastFrameTime = 0;
+let paused = false;
+let resumeUntil = 0;
 let jumpY = 0;
 let jumpVelocity = 0;
 let runWord = WORD_POOL[0];
@@ -321,6 +328,7 @@ function applyLanguage(): void {
     if (key) element.textContent = t(key);
   });
   ui.sound.setAttribute("aria-label", t("sound.label"));
+  ui.pause.setAttribute("aria-label", t("pause.label"));
   refreshShopUi();
   updateWalletUi();
   updateWordHud();
@@ -1593,13 +1601,60 @@ function startRun(asTutorial = false): void {
   ui.gameover.classList.add("hidden");
   ui.achievements.classList.add("hidden");
   ui.hud.classList.remove("hidden");
+  ui.pause.classList.remove("hidden");
+  clearPauseUi();
   audio.start();
   if (!asTutorial) showToast(t("toast.run"));
 }
 
 function tryJump(): void {
-  if (state !== "running" || jumpY > 0.04) return;
+  if (!gameplayLive() || jumpY > 0.04) return;
   jumpVelocity = JUMP_VELOCITY;
+}
+
+function gameplayLive(): boolean {
+  return state === "running" && !paused && resumeUntil <= 0;
+}
+
+function clearPauseUi(): void {
+  paused = false;
+  resumeUntil = 0;
+  ui.pauseMenu.classList.add("hidden");
+  ui.countdown.classList.add("hidden");
+}
+
+function pauseGame(): void {
+  if (state !== "running") return;
+  paused = true;
+  resumeUntil = 0;
+  ui.pauseMenu.classList.remove("hidden");
+  ui.countdown.classList.add("hidden");
+  audio.pause();
+}
+
+function beginResume(): void {
+  if (state !== "running") return;
+  paused = false;
+  resumeUntil = performance.now() + 3000;
+  ui.pauseMenu.classList.add("hidden");
+  ui.countdown.classList.remove("hidden");
+  ui.countdown.textContent = "3";
+}
+
+function togglePause(): void {
+  if (state !== "running") return;
+  if (resumeUntil > 0) {
+    pauseGame();
+    return;
+  }
+  if (paused) beginResume();
+  else pauseGame();
+}
+
+function quitPausedRun(): void {
+  ui.pause.classList.add("hidden");
+  clearPauseUi();
+  returnToMenu();
 }
 
 function updateJump(delta: number): void {
@@ -1651,6 +1706,8 @@ function continueRun(): void {
   playerRoot.position.x = targetX;
   ui.gameover.classList.add("hidden");
   ui.hud.classList.remove("hidden");
+  ui.pause.classList.remove("hidden");
+  clearPauseUi();
   audio.start();
   showToast(t("toast.continue"));
   updateWordHud();
@@ -1662,6 +1719,8 @@ function endRun(): void {
   state = "gameover";
   if (!fromTutorial) recordRunEnd();
   ui.hud.classList.add("hidden");
+  ui.pause.classList.add("hidden");
+  clearPauseUi();
   ui.finalScore.textContent = String(scoreValue());
   ui.finalDistance.textContent = `${Math.floor(distance)}m`;
   ui.finalDogs.textContent = String(dogsDefeated);
@@ -1685,6 +1744,8 @@ function returnToMenu(): void {
   refreshShopUi();
   refreshContinueUi();
   ui.hud.classList.add("hidden");
+  ui.pause.classList.add("hidden");
+  clearPauseUi();
   ui.gameover.classList.add("hidden");
   ui.achievements.classList.add("hidden");
   ui.menu.classList.remove("hidden");
@@ -1818,7 +1879,7 @@ function removeRunnerObject(index: number): void {
 }
 
 function shiftLane(direction: number): void {
-  if (state !== "running") return;
+  if (!gameplayLive()) return;
   const previous = laneIndex;
   laneIndex = THREE.MathUtils.clamp(laneIndex + direction, 0, LANES.length - 1);
   targetX = LANES[laneIndex];
@@ -1843,11 +1904,27 @@ function bindControls(): void {
     applyLanguage();
     saveEconomy();
   });
+  ui.pause.addEventListener("click", togglePause);
+  ui.pauseResume.addEventListener("click", beginResume);
+  ui.pauseQuit.addEventListener("click", quitPausedRun);
   ui.sound.addEventListener("click", () => {
     const muted = audio.toggle();
     ui.sound.textContent = muted ? "×" : "♪";
   });
   window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" || event.key.toLowerCase() === "p") {
+      if (event.key.toLowerCase() === "p" && event.target instanceof HTMLInputElement) return;
+      event.preventDefault();
+      togglePause();
+      return;
+    }
+    if (!gameplayLive()) {
+      if ((event.key === " " || event.key === "Enter") && state !== "running") {
+        if (event.target instanceof HTMLButtonElement || event.target instanceof HTMLSelectElement) return;
+        startRun(!tutorialDone);
+      }
+      return;
+    }
     if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") shiftLane(-1);
     if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") shiftLane(1);
     if (event.key === "ArrowUp" || event.key.toLowerCase() === "w") {
@@ -1856,15 +1933,7 @@ function bindControls(): void {
     }
     if (event.key === " ") {
       event.preventDefault();
-      if (state === "running") tryJump();
-      else if (!(event.target instanceof HTMLButtonElement || event.target instanceof HTMLSelectElement)) {
-        startRun(!tutorialDone);
-      }
-      return;
-    }
-    if (event.key === "Enter" && state !== "running") {
-      if (event.target instanceof HTMLButtonElement || event.target instanceof HTMLSelectElement) return;
-      startRun(!tutorialDone);
+      tryJump();
     }
   });
   canvas.addEventListener("pointerdown", (event) => {
@@ -1872,6 +1941,7 @@ function bindControls(): void {
     swipeStartY = event.clientY;
   });
   canvas.addEventListener("pointerup", (event) => {
+    if (!gameplayLive()) return;
     const deltaX = event.clientX - swipeStartX;
     const deltaY = event.clientY - swipeStartY;
     if (Math.abs(deltaY) > 28 && Math.abs(deltaY) >= Math.abs(deltaX)) {
@@ -1893,7 +1963,8 @@ function bindAppLifecycle(): void {
   const updateAudioState = (isActive: boolean): void => {
     if (!isActive) {
       audio.pause();
-    } else if (state === "running") {
+      if (state === "running") pauseGame();
+    } else if (gameplayLive()) {
       audio.resume();
     }
   };
@@ -1938,6 +2009,24 @@ function update(time: number): void {
   const delta = Math.min(Math.max((time - lastFrameTime) / 1000, 0), 0.05);
   lastFrameTime = time;
   if (document.hidden) {
+    if (state === "running") pauseGame();
+    renderer.render(scene, camera);
+    return;
+  }
+  if (state === "running" && resumeUntil > 0) {
+    const remaining = resumeUntil - time;
+    ui.countdown.textContent = String(Math.max(1, Math.ceil(remaining / 1000)));
+    if (remaining <= 0) {
+      resumeUntil = 0;
+      ui.countdown.classList.add("hidden");
+      lastFrameTime = 0;
+      audio.resume();
+    } else {
+      renderer.render(scene, camera);
+      return;
+    }
+  }
+  if (state === "running" && paused) {
     renderer.render(scene, camera);
     return;
   }

@@ -20,6 +20,7 @@
         <div class="hud-stat coins"><span data-i18n="hud.coins">BISCUITS</span><strong id="coins">0</strong></div>
         <div id="word-track" class="word-track" aria-live="polite"></div>
       </section>
+      <button id="pause" class="hidden" type="button" data-i18n-aria="pause.label">II</button>
 
       <section id="menu" class="panel">
         <div class="language-picker">
@@ -80,6 +81,14 @@
         <div id="ach-list" class="ach-list"></div>
         <button id="achievements-back" class="menu-button" type="button" data-i18n="ach.back">BACK</button>
       </section>
+
+      <section id="pause-menu" class="panel hidden">
+        <p class="eyebrow" data-i18n="pause.eyebrow">TIME OUT</p>
+        <h2 data-i18n="pause.title">PAUSED</h2>
+        <button id="pause-resume" class="sun-button" type="button" data-i18n="pause.resume">RESUME</button>
+        <button id="pause-quit" class="menu-button" type="button" data-i18n="pause.menu">MAIN MENU</button>
+      </section>
+      <div id="countdown" class="hidden" aria-live="assertive">3</div>
 
       <section id="gameover" class="panel hidden">
         <p class="eyebrow" data-i18n="over.eyebrow">THE RUN ENDS</p>

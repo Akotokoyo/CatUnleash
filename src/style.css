@@ -335,7 +335,7 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 
 .tutorial-card {
   position: absolute;
-  left: 12px;
+  left: 62px;
   right: 12px;
   bottom: max(18px, env(safe-area-inset-bottom));
   display: flex;
@@ -396,6 +396,42 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 .instructions b { font-size: 22px; }
 .instructions small { color: #76dcb9; font-size: 9px; }
 .controls { margin: 13px 0 0; color: #8cbeb0; font-size: 11px; }
+
+#pause {
+  position: absolute;
+  z-index: 9;
+  left: 14px;
+  bottom: max(15px, env(safe-area-inset-bottom));
+  width: 42px;
+  height: 42px;
+  color: #ffe17b;
+  font: 800 16px/1 "Baloo 2", sans-serif;
+  letter-spacing: .04em;
+  border: 2px solid #d5a73d;
+  border-radius: 12px;
+  background: #0d3432dc;
+  cursor: pointer;
+}
+
+#pause-menu {
+  z-index: 10;
+}
+
+#pause-resume { margin-top: 8px; }
+
+#countdown {
+  position: absolute;
+  z-index: 11;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #ffe47b;
+  font: 800 120px/1 "Baloo 2", sans-serif;
+  text-shadow: 0 6px #163a31, 0 0 24px #000;
+  pointer-events: none;
+}
+
+#countdown.hidden { display: none !important; }
 
 #sound {
   position: absolute;
@@ -748,7 +784,7 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
   .menu-button { margin-top: 10px; font-size: 13px; }
 
   .tutorial-card {
-    left: 8px;
+    left: 52px;
     right: 8px;
     bottom: max(10px, env(safe-area-inset-bottom));
     padding: 8px 8px 8px 10px;
@@ -757,6 +793,16 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 
   #tutorial-text { font-size: 13px; }
   #tutorial-skip { padding: 6px 9px; font-size: 11px; }
+
+  #pause {
+    left: 8px;
+    bottom: 8px;
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+
+  #countdown { font-size: 84px; }
 
   #sound {
     right: 8px;
