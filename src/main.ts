@@ -13,8 +13,25 @@ import {
 import { translate, type Language, type TranslationKey } from "./i18n";
 
 type RunState = "menu" | "running" | "gameover";
-type PickupType = "cat" | "tuna" | "dog" | "carrier";
+type PickupType = "cat" | "tuna" | "dog" | "carrier" | "coin" | "hint";
 type AnimalKind = "cat" | "dog";
+type CollectEffect = Exclude<PickupType, "hint">;
+
+interface ContinueSnapshot {
+  laneIndex: number;
+  catCount: number;
+  distance: number;
+  killScore: number;
+  dogsDefeated: number;
+  tunaCount: number;
+  extraLives: number;
+  level: number;
+  environmentIndex: number;
+  spawnTravel: number;
+  nextSpawn: number;
+  runTime: number;
+  stridePhase: number;
+}
 
 interface RunnerObject {
   mesh: THREE.Group;
@@ -41,12 +58,19 @@ const LANES = [-2.7, 0, 2.7];
 const TRACK_LENGTH = 14;
 const TRACK_TILES = 10;
 const PLAYER_Z = 3;
+const MAX_SPEED = 6;
+const LIFE_COST = 200;
+const CAT_COST = 20;
+const CONTINUE_COST = 150;
+const ECONOMY_KEY = "catunleashed-economy";
 const CAT_COLORS = [0xe58a31, 0xf1d28a, 0x57514c, 0xc9613d, 0xe3e0d2];
 const gold = new THREE.MeshStandardMaterial({ color: 0xe8b83f, roughness: 0.42, metalness: 0.35 });
 const terracotta = new THREE.MeshStandardMaterial({ color: 0xac4f2d, roughness: 0.82 });
 const cream = new THREE.MeshStandardMaterial({ color: 0xf7e3a6, roughness: 0.72 });
 const obsidian = new THREE.MeshStandardMaterial({ color: 0x13201e, roughness: 0.35, metalness: 0.25 });
-const sharedMaterials = new Set<THREE.Material>([gold, terracotta, cream, obsidian]);
+const biscuitTan = new THREE.MeshStandardMaterial({ color: 0xb87a3c, roughness: 0.88 });
+const biscuitToasted = new THREE.MeshStandardMaterial({ color: 0x6e3b22, roughness: 0.92 });
+const sharedMaterials = new Set<THREE.Material>([gold, terracotta, cream, obsidian, biscuitTan, biscuitToasted]);
 
 const canvas = mustElement<HTMLCanvasElement>("game");
 const mobileRendering =
@@ -68,9 +92,16 @@ const ui = {
   speed: mustElement("speed"),
   tuna: mustElement("tuna"),
   lives: mustElement("lives"),
+  coins: mustElement("coins"),
+  menuCoins: mustElement("menu-coins"),
+  shopStock: mustElement("shop-stock"),
+  buyLife: mustElement<HTMLButtonElement>("buy-life"),
+  buyCat: mustElement<HTMLButtonElement>("buy-cat"),
+  continueRun: mustElement<HTMLButtonElement>("continue-run"),
   finalScore: mustElement("final-score"),
   finalDistance: mustElement("final-distance"),
   finalDogs: mustElement("final-dogs"),
+  finalCoins: mustElement("final-coins"),
   collectFx: mustElement("collect-fx"),
   toast: mustElement("toast"),
 };
@@ -130,6 +161,12 @@ let killScore = 0;
 let dogsDefeated = 0;
 let tunaCount = 0;
 let extraLives = 0;
+let wallet = 0;
+let bankedLives = 0;
+let purchasedCats = 0;
+let lastHintLane = 1;
+let kibblePauseWaves = 0;
+let continueSnapshot: ContinueSnapshot | undefined;
 let level = 1;
 let spawnTravel = 0;
 let nextSpawn = 25;
@@ -145,7 +182,9 @@ let transitionTilesRemaining = 0;
 let environmentTransition: EnvironmentTransition | undefined;
 let language: Language = "en";
 
+loadEconomy();
 setEnvironment(0);
+catCount = 1 + purchasedCats;
 rebuildPack();
 applyLanguage();
 bindControls();
@@ -170,6 +209,8 @@ function applyLanguage(): void {
     if (key) element.textContent = t(key);
   });
   ui.sound.setAttribute("aria-label", t("sound.label"));
+  refreshShopUi();
+  updateWalletUi();
 }
 
 function setEnvironment(index: number): void {
@@ -542,6 +583,91 @@ function makeTuna(): THREE.Group {
   return group;
 }
 
+function makePawCookieShape(scale: number): THREE.Shape {
+  const s = new THREE.Shape();
+  const k = scale;
+  s.moveTo(0, 0);
+  s.bezierCurveTo(-0.42 * k, 0, -0.82 * k, 0.06 * k, -0.78 * k, 0.4 * k);
+  s.bezierCurveTo(-1.04 * k, 0.48 * k, -1.08 * k, 0.96 * k, -0.7 * k, 1.06 * k);
+  s.bezierCurveTo(-0.52 * k, 1.14 * k, -0.5 * k, 0.9 * k, -0.46 * k, 0.78 * k);
+  s.bezierCurveTo(-0.5 * k, 1.0 * k, -0.38 * k, 1.34 * k, -0.16 * k, 1.32 * k);
+  s.bezierCurveTo(-0.04 * k, 1.3 * k, -0.04 * k, 1.04 * k, 0, 0.9 * k);
+  s.bezierCurveTo(0.04 * k, 1.04 * k, 0.04 * k, 1.3 * k, 0.16 * k, 1.32 * k);
+  s.bezierCurveTo(0.38 * k, 1.34 * k, 0.5 * k, 1.0 * k, 0.46 * k, 0.78 * k);
+  s.bezierCurveTo(0.5 * k, 0.9 * k, 0.52 * k, 1.14 * k, 0.7 * k, 1.06 * k);
+  s.bezierCurveTo(1.08 * k, 0.96 * k, 1.04 * k, 0.48 * k, 0.78 * k, 0.4 * k);
+  s.bezierCurveTo(0.82 * k, 0.06 * k, 0.42 * k, 0, 0, 0);
+  return s;
+}
+
+function makeCoin(): THREE.Group {
+  const group = new THREE.Group();
+  const scale = 0.52;
+  const geometry = new THREE.ExtrudeGeometry(makePawCookieShape(scale), {
+    depth: 0.12,
+    bevelEnabled: true,
+    bevelThickness: 0.03,
+    bevelSize: 0.028,
+    bevelSegments: 1,
+    curveSegments: 10,
+  });
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  const lift = box ? -box.min.y : 0;
+  if (lift) geometry.translate(0, lift, 0);
+  const cookie = new THREE.Mesh(geometry, biscuitTan);
+  cookie.castShadow = true;
+  group.add(cookie);
+
+  const addPrint = (x: number, y: number, radius: number, scaleX: number, scaleY: number): void => {
+    const print = new THREE.Mesh(new THREE.CircleGeometry(radius, 12), biscuitToasted);
+    print.scale.set(scaleX, scaleY, 1);
+    print.position.set(x, y + lift, 0.13);
+    group.add(print);
+  };
+  addPrint(0, 0.28, 0.16, 1.2, 0.95);
+  addPrint(-0.34, 0.58, 0.075, 1, 1.05);
+  addPrint(-0.12, 0.7, 0.08, 1, 1.08);
+  addPrint(0.12, 0.7, 0.08, 1, 1.08);
+  addPrint(0.34, 0.58, 0.075, 1, 1.05);
+  return group;
+}
+
+function makePathHint(): THREE.Group {
+  const group = new THREE.Group();
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffe27a,
+    emissive: 0xffc44d,
+    emissiveIntensity: 0.95,
+    transparent: true,
+    opacity: 0.72,
+    roughness: 0.38,
+    depthWrite: false,
+  });
+  const stripe = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.2, 4.8),
+    new THREE.MeshStandardMaterial({
+      color: 0xffe27a,
+      emissive: 0xffc44d,
+      emissiveIntensity: 0.5,
+      transparent: true,
+      opacity: 0.28,
+      depthWrite: false,
+    }),
+  );
+  stripe.rotation.x = -Math.PI / 2;
+  stripe.position.set(0, 0.03, -1.5);
+  group.add(stripe);
+  const geometry = new THREE.ConeGeometry(0.46, 1.05, 3);
+  for (let index = 0; index < 3; index += 1) {
+    const arrow = new THREE.Mesh(geometry, material);
+    arrow.rotation.x = Math.PI / 2;
+    arrow.position.set(0, 0.06, -index * 1.4);
+    group.add(arrow);
+  }
+  return group;
+}
+
 function makeCarrier(): THREE.Group {
   const group = new THREE.Group();
   const upperMaterial = new THREE.MeshStandardMaterial({ color: 0xdce5e5, roughness: 0.7, flatShading: true });
@@ -717,27 +843,98 @@ function makeBadge(value: string | number): THREE.Sprite {
   return sprite;
 }
 
-function spawnWave(): void {
-  const laneOrder = [0, 1, 2].sort(() => Math.random() - 0.5);
-  const roll = Math.random();
-  if (roll < 0.22) {
-    spawnObject("cat", laneOrder[0], 0);
-    spawnObject("dog", laneOrder[1], randomStrength());
-  } else if (roll < 0.4) {
-    spawnObject("tuna", laneOrder[0], 0);
-    spawnObject("dog", laneOrder[1], randomStrength());
-  } else if (roll < 0.72) {
-    spawnObject("dog", laneOrder[0], randomStrength());
-    spawnObject("dog", laneOrder[1], randomStrength());
-  } else if (roll < 0.88) {
-    spawnObject("dog", laneOrder[0], randomStrength());
-  } else {
-    spawnObject("carrier", laneOrder[0], 0);
-    spawnObject("dog", laneOrder[1], randomStrength());
-  }
+function objectsNear(lane: number, z: number, radius: number, types: PickupType[]): boolean {
+  return objects.some(
+    (object) =>
+      object.lane === lane &&
+      types.includes(object.type) &&
+      Math.abs(object.mesh.position.z - z) < radius,
+  );
 }
 
-function spawnObject(type: PickupType, lane: number, strength: number): void {
+function laneClearOf(lane: number, fromZ: number, toZ: number, types: PickupType[], radius: number): boolean {
+  const minZ = Math.min(fromZ, toZ) - radius;
+  const maxZ = Math.max(fromZ, toZ) + radius;
+  return !objects.some(
+    (object) =>
+      object.lane === lane &&
+      types.includes(object.type) &&
+      object.mesh.position.z >= minZ &&
+      object.mesh.position.z <= maxZ,
+  );
+}
+
+function spawnWave(): void {
+  const laneOrder = [0, 1, 2].sort(() => Math.random() - 0.5);
+  const blocked = new Set<number>();
+  const rewards = new Set<number>();
+  const place = (type: PickupType, lane: number, strength = 0): void => {
+    const z = -86 - Math.random() * 4;
+    let spawnLane = lane;
+    if (type === "dog" || type === "carrier") {
+      const candidates = [lane, ...[0, 1, 2].filter((item) => item !== lane)];
+      const free = candidates.find((item) => !objectsNear(item, z, 10, ["coin"]));
+      if (free === undefined) return;
+      spawnLane = free;
+      blocked.add(spawnLane);
+      spawnObject(type, spawnLane, strength, z);
+      return;
+    }
+    spawnObject(type, spawnLane, strength, z);
+    if (type === "cat" || type === "tuna") rewards.add(spawnLane);
+  };
+  const roll = Math.random();
+  if (roll < 0.22) {
+    place("cat", laneOrder[0]);
+    place("dog", laneOrder[1], randomStrength());
+  } else if (roll < 0.4) {
+    place("tuna", laneOrder[0]);
+    place("dog", laneOrder[1], randomStrength());
+  } else if (roll < 0.72) {
+    place("dog", laneOrder[0], randomStrength());
+    place("dog", laneOrder[1], randomStrength());
+  } else if (roll < 0.88) {
+    place("dog", laneOrder[0], randomStrength());
+  } else {
+    place("carrier", laneOrder[0]);
+    place("dog", laneOrder[1], randomStrength());
+  }
+  spawnRecommendedPath(blocked, rewards);
+}
+
+function spawnRecommendedPath(blocked: Set<number>, rewards: Set<number>): void {
+  const safe = [0, 1, 2].filter((lane) => !blocked.has(lane));
+  if (safe.length === 0) return;
+  const rewardLane = [...rewards].find((lane) => safe.includes(lane));
+  const hintLane = rewardLane
+    ?? (safe.includes(lastHintLane) ? lastHintLane : safe[Math.floor(Math.random() * safe.length)]);
+  const baseZ = -86;
+  spawnObject("hint", hintLane, 0, baseZ + 8);
+  if (kibblePauseWaves > 0) {
+    kibblePauseWaves -= 1;
+    lastHintLane = hintLane;
+    return;
+  }
+  const count = 5 + Math.floor(Math.random() * 3);
+  const spacing = 5.6;
+  const gap = 10;
+  const farZ = baseZ + gap;
+  const nearZ = farZ + (count - 1) * spacing;
+  const biscuitLane = safe.find((lane) => laneClearOf(lane, nearZ, farZ, ["dog", "carrier"], 10));
+  if (biscuitLane === undefined) {
+    lastHintLane = hintLane;
+    return;
+  }
+  for (let index = 0; index < count; index += 1) {
+    const z = nearZ - index * spacing;
+    if (objectsNear(biscuitLane, z, 10, ["dog", "carrier"])) continue;
+    spawnObject("coin", biscuitLane, 0, z);
+  }
+  kibblePauseWaves = 1 + Math.floor(Math.random() * 2);
+  lastHintLane = biscuitLane;
+}
+
+function spawnObject(type: PickupType, lane: number, strength: number, z = -86 - Math.random() * 4): void {
   const mesh =
     type === "cat"
       ? makeRecruitCat()
@@ -745,8 +942,12 @@ function spawnObject(type: PickupType, lane: number, strength: number): void {
         ? makeTuna()
         : type === "carrier"
           ? makeCarrier()
-          : makeDogPack(strength);
-  mesh.position.set(LANES[lane], 0.3, -86 - Math.random() * 4);
+          : type === "coin"
+            ? makeCoin()
+            : type === "hint"
+              ? makePathHint()
+              : makeDogPack(strength);
+  mesh.position.set(LANES[lane], type === "hint" ? 0.02 : 0.3, z);
   objectRoot.add(mesh);
   objects.push({ mesh, type, lane, strength, phase: Math.random() * Math.PI * 2 });
 }
@@ -757,25 +958,31 @@ function randomStrength(): number {
 }
 
 function startRun(): void {
+  continueSnapshot = undefined;
   clearObjects();
   state = "running";
   laneIndex = 1;
   targetX = LANES[laneIndex];
-  catCount = 1;
+  catCount = 1 + purchasedCats;
+  purchasedCats = 0;
   distance = 0;
   killScore = 0;
   dogsDefeated = 0;
   tunaCount = 0;
-  extraLives = 0;
+  extraLives = bankedLives;
+  lastHintLane = 1;
+  kibblePauseWaves = 0;
   level = 1;
   spawnTravel = 0;
   nextSpawn = 20;
   runTime = 0;
   stridePhase = 0;
   invulnerableUntil = 0;
+  saveEconomy();
   setEnvironment(0);
   rebuildPack();
   updateResourceHud();
+  refreshShopUi();
   playerRoot.position.x = targetX;
   ui.menu.classList.add("hidden");
   ui.gameover.classList.add("hidden");
@@ -784,25 +991,61 @@ function startRun(): void {
   showToast(t("toast.run"));
 }
 
+function continueRun(): void {
+  const snapshot = continueSnapshot;
+  if (!snapshot || !spendCoins(CONTINUE_COST)) return;
+  continueSnapshot = undefined;
+  clearObjects();
+  state = "running";
+  laneIndex = snapshot.laneIndex;
+  targetX = LANES[laneIndex];
+  catCount = Math.max(1, snapshot.catCount);
+  distance = snapshot.distance;
+  killScore = snapshot.killScore;
+  dogsDefeated = snapshot.dogsDefeated;
+  tunaCount = snapshot.tunaCount;
+  extraLives = snapshot.extraLives;
+  level = snapshot.level;
+  spawnTravel = snapshot.spawnTravel;
+  nextSpawn = snapshot.nextSpawn;
+  runTime = snapshot.runTime;
+  stridePhase = snapshot.stridePhase;
+  lastHintLane = laneIndex;
+  invulnerableUntil = runTime + 2.5;
+  setEnvironment(snapshot.environmentIndex);
+  rebuildPack();
+  updateResourceHud();
+  playerRoot.position.x = targetX;
+  ui.gameover.classList.add("hidden");
+  ui.hud.classList.remove("hidden");
+  audio.start();
+  showToast(t("toast.continue"));
+}
+
 function endRun(): void {
   state = "gameover";
   ui.hud.classList.add("hidden");
   ui.finalScore.textContent = String(scoreValue());
   ui.finalDistance.textContent = `${Math.floor(distance)}m`;
   ui.finalDogs.textContent = String(dogsDefeated);
+  updateWalletUi();
+  refreshContinueUi();
   ui.gameover.classList.remove("hidden");
 }
 
 function returnToMenu(): void {
+  continueSnapshot = undefined;
   state = "menu";
   clearObjects();
   setEnvironment(0);
-  catCount = 1;
+  catCount = 1 + purchasedCats;
   laneIndex = 1;
   targetX = LANES[laneIndex];
   playerRoot.position.x = targetX;
   rebuildPack();
   updateResourceHud();
+  refreshShopUi();
+  refreshContinueUi();
   ui.hud.classList.add("hidden");
   ui.gameover.classList.add("hidden");
   ui.menu.classList.remove("hidden");
@@ -837,7 +1080,10 @@ function shiftLane(direction: number): void {
 function bindControls(): void {
   ui.play.addEventListener("click", startRun);
   ui.restart.addEventListener("click", startRun);
+  ui.continueRun.addEventListener("click", continueRun);
   ui.backMenu.addEventListener("click", returnToMenu);
+  ui.buyLife.addEventListener("click", () => buyUpgrade("life"));
+  ui.buyCat.addEventListener("click", () => buyUpgrade("cat"));
   ui.language.addEventListener("change", () => {
     language = ui.language.value as Language;
     applyLanguage();
@@ -849,7 +1095,10 @@ function bindControls(): void {
   window.addEventListener("keydown", (event) => {
     if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") shiftLane(-1);
     if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") shiftLane(1);
-    if ((event.key === " " || event.key === "Enter") && state !== "running") startRun();
+    if ((event.key === " " || event.key === "Enter") && state !== "running") {
+      if (event.target instanceof HTMLButtonElement || event.target instanceof HTMLSelectElement) return;
+      startRun();
+    }
   });
   canvas.addEventListener("pointerdown", (event) => {
     swipeStartX = event.clientX;
@@ -909,7 +1158,7 @@ function update(): void {
 
   if (state === "running") {
     runTime += delta;
-    const speed = 12 * Math.min(7, Math.pow(1 + runTime / 45, 1.25));
+    const speed = 12 * Math.min(MAX_SPEED, Math.pow(1 + runTime / 45, 1.25));
     const travel = speed * delta;
     stridePhase += delta * speed * 0.34;
     distance += travel * 0.34;
@@ -1011,16 +1260,29 @@ function updateObjects(travel: number, delta: number): void {
     const object = objects[i];
     const previousZ = object.mesh.position.z;
     object.mesh.position.z += travel;
-    if (object.type === "tuna") object.mesh.rotation.y += delta * 2.2;
-    object.mesh.position.y = 0.3 + Math.sin(elapsed * 3.2 + object.phase) * 0.12;
+    if (object.type === "hint") {
+      object.mesh.position.y = 0.06;
+    } else if (object.type === "coin") {
+      object.mesh.rotation.z = Math.sin(elapsed * 2.4 + object.phase) * 0.08;
+      object.mesh.position.y = 0.55 + Math.sin(elapsed * 3.1 + object.phase) * 0.05;
+    } else if (object.type === "tuna") {
+      object.mesh.rotation.y += delta * 2.2;
+      object.mesh.position.y = 0.3 + Math.sin(elapsed * 3.2 + object.phase) * 0.12;
+    } else {
+      object.mesh.position.y = 0.3 + Math.sin(elapsed * 3.2 + object.phase) * 0.12;
+    }
+
+    if (object.type === "hint") {
+      if (object.mesh.position.z > PLAYER_Z + 9) removeRunnerObject(i);
+      continue;
+    }
 
     const closeZ =
       Math.abs(object.mesh.position.z - PLAYER_Z) < 1.25 ||
       (previousZ < PLAYER_Z && object.mesh.position.z > PLAYER_Z);
-    if (closeZ && object.lane === laneIndex && runTime < invulnerableUntil) {
-      removeRunnerObject(i);
-    } else if (closeZ && object.lane === laneIndex) {
-      collect(object);
+    if (closeZ && object.lane === laneIndex) {
+      const hazard = object.type === "dog" || object.type === "carrier";
+      if (!(hazard && runTime < invulnerableUntil)) collect(object);
       removeRunnerObject(i);
     } else if (object.mesh.position.z > PLAYER_Z + 9) {
       removeRunnerObject(i);
@@ -1029,7 +1291,17 @@ function updateObjects(travel: number, delta: number): void {
 }
 
 function collect(object: RunnerObject): void {
-  spawnScreenSparkles(object.type);
+  const { type } = object;
+  if (type === "hint") return;
+  spawnScreenSparkles(type);
+  if (type === "coin") {
+    wallet += 1;
+    audio.pickup(true);
+    updateWalletUi();
+    saveEconomy();
+    showToast(t("toast.coin"), "coin");
+    return;
+  }
   if (object.type === "cat") {
     catCount += 1;
     killScore += 25;
@@ -1075,12 +1347,31 @@ function collect(object: RunnerObject): void {
 
 function loseLife(): void {
   if (extraLives <= 0) {
+    continueSnapshot = {
+      laneIndex,
+      catCount: Math.max(1, catCount),
+      distance,
+      killScore,
+      dogsDefeated,
+      tunaCount,
+      extraLives,
+      level,
+      environmentIndex,
+      spawnTravel,
+      nextSpawn,
+      runTime,
+      stridePhase,
+    };
     catCount = 0;
     ui.cats.textContent = "0";
     endRun();
     return;
   }
   extraLives -= 1;
+  if (extraLives < bankedLives) {
+    bankedLives = extraLives;
+    saveEconomy();
+  }
   catCount = Math.max(1, catCount);
   invulnerableUntil = runTime + 2;
   rebuildPack();
@@ -1089,33 +1380,116 @@ function loseLife(): void {
   showToast(t("toast.lifeUsed"));
 }
 
+function loadEconomy(): void {
+  try {
+    const raw = localStorage.getItem(ECONOMY_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw) as { coins?: number; lives?: number; cats?: number };
+    wallet = Math.max(0, Math.floor(Number(saved.coins) || 0));
+    bankedLives = Math.max(0, Math.floor(Number(saved.lives) || 0));
+    purchasedCats = Math.max(0, Math.floor(Number(saved.cats) || 0));
+  } catch {
+    wallet = 0;
+    bankedLives = 0;
+    purchasedCats = 0;
+  }
+}
+
+function saveEconomy(): void {
+  localStorage.setItem(ECONOMY_KEY, JSON.stringify({
+    coins: wallet,
+    lives: bankedLives,
+    cats: purchasedCats,
+  }));
+}
+
+function spendCoins(cost: number): boolean {
+  if (wallet < cost) {
+    showToast(t("toast.needCoins"));
+    return false;
+  }
+  wallet -= cost;
+  updateWalletUi();
+  saveEconomy();
+  return true;
+}
+
+function buyUpgrade(kind: "life" | "cat"): void {
+  if (state !== "menu") return;
+  if (kind === "life") {
+    if (!spendCoins(LIFE_COST)) return;
+    bankedLives += 1;
+    extraLives = bankedLives;
+    saveEconomy();
+    updateResourceHud();
+    refreshShopUi();
+    audio.pickup(true);
+    showToast(t("toast.boughtLife"), "tuna");
+    return;
+  }
+  if (!spendCoins(CAT_COST)) return;
+  purchasedCats += 1;
+  catCount = 1 + purchasedCats;
+  saveEconomy();
+  rebuildPack();
+  refreshShopUi();
+  audio.pickup(true);
+  showToast(t("toast.boughtCat"), "cat");
+}
+
+function updateWalletUi(): void {
+  ui.coins.textContent = String(wallet);
+  ui.menuCoins.textContent = String(wallet);
+  ui.finalCoins.textContent = String(wallet);
+  ui.buyLife.classList.toggle("unaffordable", wallet < LIFE_COST);
+  ui.buyCat.classList.toggle("unaffordable", wallet < CAT_COST);
+  refreshContinueUi();
+}
+
+function refreshShopUi(): void {
+  ui.shopStock.textContent = t("shop.stock", { lives: bankedLives, cats: purchasedCats });
+  ui.buyLife.classList.toggle("unaffordable", wallet < LIFE_COST);
+  ui.buyCat.classList.toggle("unaffordable", wallet < CAT_COST);
+}
+
+function refreshContinueUi(): void {
+  ui.continueRun.classList.toggle("hidden", !continueSnapshot);
+  ui.continueRun.disabled = !continueSnapshot;
+}
+
 function updateResourceHud(): void {
   ui.tuna.textContent = `${tunaCount}/20`;
   ui.lives.textContent = String(extraLives);
+  updateWalletUi();
 }
 
-function spawnScreenSparkles(type: PickupType): void {
+function spawnScreenSparkles(type: CollectEffect): void {
   const burst = document.createElement("div");
   burst.className = `collect-burst ${type}`;
   const flash = document.createElement("div");
   flash.className = "collect-flash";
   burst.append(flash);
-  const sparkleCount = mobileRendering
-    ? (type === "carrier" ? 16 : 12)
-    : (type === "carrier" ? 28 : 22);
+  const sparkleCount = type === "coin"
+    ? (mobileRendering ? 4 : 6)
+    : mobileRendering
+      ? (type === "carrier" ? 16 : 12)
+      : (type === "carrier" ? 28 : 22);
   for (let index = 0; index < sparkleCount; index += 1) {
     const sparkle = document.createElement("i");
     sparkle.style.setProperty("--angle", `${(360 / sparkleCount) * index + Math.random() * 12}deg`);
-    sparkle.style.setProperty("--distance", `${THREE.MathUtils.randInt(90, type === "carrier" ? 270 : 220)}px`);
+    sparkle.style.setProperty("--distance", `${THREE.MathUtils.randInt(
+      type === "coin" ? 36 : 90,
+      type === "carrier" ? 270 : type === "coin" ? 78 : 220,
+    )}px`);
     sparkle.style.setProperty("--delay", `${Math.random() * 90}ms`);
-    sparkle.style.setProperty("--size", `${THREE.MathUtils.randInt(5, 14)}px`);
+    sparkle.style.setProperty("--size", `${THREE.MathUtils.randInt(type === "coin" ? 3 : 5, type === "coin" ? 7 : 14)}px`);
     burst.append(sparkle);
   }
   ui.collectFx.append(burst);
   window.setTimeout(() => burst.remove(), 1000);
 }
 
-function showToast(message: string, effectType?: PickupType): void {
+function showToast(message: string, effectType?: CollectEffect): void {
   ui.toast.textContent = message;
   ui.toast.className = "";
   void ui.toast.offsetWidth;

@@ -17,6 +17,7 @@
         <div class="hud-stat"><span data-i18n="hud.speed">SPEED</span><strong id="speed">1.0×</strong></div>
         <div class="hud-stat tuna"><span data-i18n="hud.tuna">TUNA</span><strong id="tuna">0/20</strong></div>
         <div class="hud-stat lives"><span data-i18n="hud.lives">LIVES</span><strong id="lives">0</strong></div>
+        <div class="hud-stat coins"><span data-i18n="hud.coins">BISCUITS</span><strong id="coins">0</strong></div>
       </section>
 
       <section id="menu" class="panel">
@@ -34,11 +35,36 @@
         <h1>CAT<span>UNLEASHED</span></h1>
         <p class="tagline" data-i18n="menu.tagline">Build the pack. Rule every world.</p>
         <button id="play" class="sun-button" type="button" data-i18n="menu.play">PLAY</button>
+        <div class="shop">
+          <div class="shop-wallet">
+            <span class="coin-icon" aria-hidden="true"></span>
+            <strong id="menu-coins">0</strong>
+            <span data-i18n="shop.coins">BISCUITS</span>
+          </div>
+          <div class="shop-actions">
+            <button id="buy-life" class="shop-button" type="button">
+              <b>❤️</b>
+              <span>
+                <strong data-i18n="shop.life">Extra life</strong>
+                <small data-i18n="shop.lifeHint">200 biscuits</small>
+              </span>
+            </button>
+            <button id="buy-cat" class="shop-button" type="button">
+              <b>🐱</b>
+              <span>
+                <strong data-i18n="shop.cat">Cat</strong>
+                <small data-i18n="shop.catHint">20 biscuits each</small>
+              </span>
+            </button>
+          </div>
+          <p class="shop-stock" id="shop-stock"></p>
+        </div>
         <div class="instructions">
           <div><b>🐱</b><span><span data-i18n="menu.cat">Cat</span><br /><small data-i18n="menu.catHint">+1 to the pack</small></span></div>
           <div><b>🐟</b><span><span data-i18n="menu.tuna">Tuna</span><br /><small data-i18n="menu.tunaHint">20 = +1 life</small></span></div>
           <div><b>🐶</b><span><span data-i18n="menu.dogs">Dogs</span><br /><small data-i18n="menu.dogsHint">−cats + points</small></span></div>
           <div><b>🧳</b><span><span data-i18n="menu.carrier">Cat carrier</span><br /><small data-i18n="menu.carrierHint">instant KO</small></span></div>
+          <div class="wide"><b>🐾</b><span><span data-i18n="menu.coin">Paw biscuit</span><br /><small data-i18n="menu.coinHint">follow the snack path</small></span></div>
         </div>
         <p class="controls" data-i18n="menu.controls">Swipe or use ← → to change lane</p>
       </section>
@@ -50,7 +76,12 @@
         <div class="result-row">
           <span><span data-i18n="over.distance">Distance</span> <b id="final-distance">0m</b></span>
           <span><span data-i18n="over.dogs">Dogs</span> <b id="final-dogs">0</b></span>
+          <span><span data-i18n="over.coins">Biscuits</span> <b id="final-coins">0</b></span>
         </div>
+        <button id="continue-run" class="sun-button continue-button hidden" type="button">
+          <span data-i18n="over.continue">CONTINUE</span>
+          <small data-i18n="over.continueHint">150 biscuits · resume here</small>
+        </button>
         <button id="restart" class="sun-button" type="button" data-i18n="over.retry">TRY AGAIN</button>
         <button id="back-menu" class="menu-button" type="button" data-i18n="over.menu">MAIN MENU</button>
       </section>

@@ -41,17 +41,20 @@ body {
 
 #hud {
   position: absolute;
-  inset: max(18px, env(safe-area-inset-top)) 14px auto;
+  inset: max(18px, env(safe-area-inset-top)) 10px auto;
   z-index: 4;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 5px;
   pointer-events: none;
 }
 
 .hud-stat {
-  min-width: 64px;
-  padding: 7px 7px 5px;
+  min-width: 52px;
+  flex: 1 1 52px;
+  max-width: 110px;
+  padding: 7px 6px 5px;
   text-align: center;
   color: #fff1b1;
   background: linear-gradient(#123f3cde, #072422e8);
@@ -78,11 +81,14 @@ body {
 .hud-stat.cats strong { color: #7cf2c6; }
 .hud-stat.tuna strong { color: #ffcf67; }
 .hud-stat.lives strong { color: #ff8b78; }
+.hud-stat.coins strong { color: #ffe27a; }
 
 .panel {
   position: absolute;
   z-index: 5;
   inset: auto 20px max(28px, env(safe-area-inset-bottom));
+  max-height: calc(100% - 36px);
+  overflow-y: auto;
   padding: 25px 20px 20px;
   text-align: center;
   border: 3px solid #d6a53a;
@@ -136,9 +142,92 @@ h1 span { display: block; color: #68dfb4; font-size: .72em; }
 h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 
 .tagline {
-  margin: 12px 0 15px;
+  margin: 8px 0 12px;
   color: #d9eee1;
   font-size: 16px;
+}
+
+.shop {
+  margin-top: 12px;
+  padding: 10px 8px 8px;
+  background: #071f1ec9;
+  border: 1px solid #367d69;
+  border-radius: 14px;
+}
+
+.shop-wallet {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #e6bd54;
+  font: 700 11px "Cinzel", serif;
+  letter-spacing: .12em;
+}
+
+.shop-wallet strong {
+  color: #ffe47b;
+  font: 800 22px "Baloo 2", sans-serif;
+  letter-spacing: 0;
+}
+
+.coin-icon {
+  position: relative;
+  width: 11px;
+  height: 8px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: #b87a3c;
+  box-shadow:
+    -5px -5px 0 -2.5px #b87a3c,
+    -1.5px -7px 0 -2.4px #c48a4a,
+    1.5px -7px 0 -2.4px #c48a4a,
+    5px -5px 0 -2.5px #b87a3c,
+    0 1px 2px #0007;
+}
+
+.shop-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.shop-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 7px;
+  color: #fff5cb;
+  text-align: left;
+  border: 2px solid #d6a53a;
+  border-radius: 12px;
+  background: linear-gradient(#1a4a45, #0c2f2c);
+  box-shadow: inset 0 0 0 1px #2f6f62;
+  cursor: pointer;
+}
+
+.shop-button b { font-size: 20px; line-height: 1; }
+.shop-button span { min-width: 0; }
+.shop-button strong {
+  display: block;
+  font-size: 13px;
+  line-height: 1.1;
+}
+.shop-button small {
+  display: block;
+  color: #ffe27a;
+  font-size: 10px;
+}
+
+.shop-button:active { transform: translateY(1px); }
+.shop-button.unaffordable { opacity: 0.45; }
+
+.shop-stock {
+  margin: 8px 0 0;
+  color: #8cbeb0;
+  font-size: 11px;
 }
 
 .sun-button {
@@ -154,6 +243,27 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 }
 
 .sun-button:active { transform: translateY(4px); box-shadow: inset 0 0 0 3px #fff0a2, 0 2px 0 #7e4318; }
+.sun-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.continue-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 10px;
+  line-height: 1.05;
+}
+
+.continue-button small {
+  font: 700 12px "Baloo 2", sans-serif;
+  color: #5a3314;
+}
+
+#restart { margin-top: 4px; }
 
 .menu-button {
   display: block;
@@ -173,8 +283,10 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
-  margin-top: 22px;
+  margin-top: 14px;
 }
+
+.instructions .wide { grid-column: 1 / -1; }
 
 .instructions div {
   display: flex;
@@ -227,6 +339,7 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 
 .collect-burst.cat { --fx-color: #6effc5; }
 .collect-burst.tuna { --fx-color: #ffd85d; }
+.collect-burst.coin { --fx-color: #d4a066; }
 .collect-burst.dog { --fx-color: #ff795f; }
 .collect-burst.carrier { --fx-color: #ff3f63; }
 
@@ -235,6 +348,11 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
   inset: -20%;
   background: radial-gradient(circle at 50% 43%, currentColor 0, transparent 58%);
   animation: collect-flash .72s ease-out both;
+}
+
+.collect-burst.coin .collect-flash {
+  inset: 18%;
+  animation: collect-flash-soft .4s ease-out both;
 }
 
 .collect-burst i {
@@ -247,6 +365,10 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
   background: #fff;
   box-shadow: 0 0 5px #fff, 0 0 16px currentColor;
   animation: sparkle-burst .82s var(--delay) cubic-bezier(.1, .65, .25, 1) both;
+}
+
+.collect-burst.coin i {
+  box-shadow: 0 0 4px currentColor;
 }
 
 .collect-burst i::after {
@@ -262,7 +384,7 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
   position: absolute;
   z-index: 7;
   left: 50%;
-  top: 28%;
+  top: 18%;
   opacity: 0;
   color: #fff4a4;
   font: 800 28px "Baloo 2", sans-serif;
@@ -276,7 +398,7 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 #toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
 
 #toast.collect-message {
-  top: 35%;
+  top: 22%;
   width: 94%;
   color: #fff;
   font-size: clamp(48px, 13vw, 88px);
@@ -293,6 +415,7 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 
 #toast.collect-message.cat { color: #83ffd1; }
 #toast.collect-message.tuna { color: #ffe273; }
+#toast.collect-message.coin { color: #e2b07a; }
 #toast.collect-message.dog { color: #ff8a72; }
 #toast.collect-message.carrier { color: #ff5875; }
 
@@ -331,11 +454,17 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 
 .result span { display: block; color: #8ec5b4; font-size: 11px; letter-spacing: .15em; }
 .result strong { color: #ffe47b; font-size: 42px; line-height: 1; }
-.result-row { display: flex; justify-content: center; gap: 28px; margin-bottom: 18px; color: #a9cfc4; }
+.result-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 16px 28px; margin-bottom: 18px; color: #a9cfc4; }
 .result-row b { color: #fff; margin-left: 4px; }
+
+@keyframes collect-flash-soft {
+  0% { opacity: 0; transform: scale(.7); }
+  18% { opacity: .14; }
+  100% { opacity: 0; transform: scale(1.02); }
+}
 
 @media (min-width: 700px) {
   .panel { inset-inline: 70px; }
   #hud { gap: 9px; }
-  .hud-stat { min-width: 92px; }
+  .hud-stat { min-width: 84px; }
 }
