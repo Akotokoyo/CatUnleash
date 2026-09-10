@@ -1,6 +1,20 @@
 import type { Language } from "./i18n";
 
-export const WORD_POOL = ["CAT", "FOOD", "WHILE", "THANKS", "FOREACH"] as const;
+export const WORD_POOL = [
+  "CAT",
+  "PAW",
+  "YARN",
+  "PURR",
+  "KITTY",
+  "TREAT",
+  "KITTEN",
+  "CATNIP",
+  "SCRATCH",
+  "SUNBEAM",
+  "WHISKERS",
+  "PURRFECT",
+  "NYANYANYANYA",
+] as const;
 export type WordToken = (typeof WORD_POOL)[number];
 
 export interface AchievementDef {
@@ -9,7 +23,10 @@ export interface AchievementDef {
   description: Record<Language, string>;
 }
 
-const SCORE_THRESHOLDS = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000];
+const SCORE_THRESHOLDS = [
+  1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000,
+  15000, 20000, 25000, 30000,
+];
 const BISCUIT_THRESHOLDS = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000];
 const CAT_THRESHOLDS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 const LEVEL_THRESHOLDS = [2, 3, 4, 5, 6, 7];
@@ -98,6 +115,34 @@ const SCORE_COPY: Record<number, Pick<AchievementDef, "title" | "description">> 
     ["Fünf-Stellen-Club", "Punktzahl über 10.000"],
     ["Club de 5 cifras", "Puntuación mayor que 10.000"],
     ["Club a 5 cifre", "Punteggio maggiore di 10.000"],
+  ),
+  15000: copy(
+    ["Fifteen-K Feast", "Score greater than 15,000"],
+    ["Festin à 15 000", "Score supérieur à 15 000"],
+    ["15.000-Festmahl", "Punktzahl über 15.000"],
+    ["Festín 15.000", "Puntuación mayor que 15.000"],
+    ["Banchetto da 15.000", "Punteggio maggiore di 15.000"],
+  ),
+  20000: copy(
+    ["Twenty Thousand Treats", "Score greater than 20,000"],
+    ["20 000 croquettes", "Score supérieur à 20 000"],
+    ["Zwanzigtausend Snacks", "Punktzahl über 20.000"],
+    ["Veinte mil premios", "Puntuación mayor que 20.000"],
+    ["Ventimila snack", "Punteggio maggiore di 20.000"],
+  ),
+  25000: copy(
+    ["High Score Hairball", "Score greater than 25,000"],
+    ["Boule de poils record", "Score supérieur à 25 000"],
+    ["Highscore-Haarball", "Punktzahl über 25.000"],
+    ["Bola de pelo récord", "Puntuación mayor que 25.000"],
+    ["Bolo di pelo record", "Punteggio maggiore di 25.000"],
+  ),
+  30000: copy(
+    ["Thirty-K Throne", "Score greater than 30,000"],
+    ["Trône à 30 000", "Score supérieur à 30 000"],
+    ["Thron bei 30.000", "Punktzahl über 30.000"],
+    ["Trono 30.000", "Puntuación mayor que 30.000"],
+    ["Trono da 30.000", "Punteggio maggiore di 30.000"],
   ),
 };
 
@@ -255,33 +300,89 @@ const WORD_COPY: Record<WordToken, Pick<AchievementDef, "title" | "description">
     ["Se escribe CAT", "Has encontrado la palabra CAT"],
     ["Si scrive CAT", "Hai trovato la parola CAT"],
   ),
-  FOOD: copy(
-    ["Snack Decoder", "You found the word FOOD"],
-    ["Décodeur de snacks", "Tu as trouvé le mot FOOD"],
-    ["Snack-Decoder", "Du hast das Wort FOOD gefunden"],
-    ["Decodificador de snacks", "Has encontrado la palabra FOOD"],
-    ["Decodificatore di snack", "Hai trovato la parola FOOD"],
+  PAW: copy(
+    ["Tiny Paw", "You found the word PAW"],
+    ["Petite patte", "Tu as trouvé le mot PAW"],
+    ["Kleine Pfote", "Du hast das Wort PAW gefunden"],
+    ["Patita", "Has encontrado la palabra PAW"],
+    ["Zampetta", "Hai trovato la parola PAW"],
   ),
-  WHILE: copy(
-    ["Meanwhile…", "You found the word WHILE"],
-    ["Pendant ce temps…", "Tu as trouvé le mot WHILE"],
-    ["Währenddessen…", "Du hast das Wort WHILE gefunden"],
-    ["Mientras tanto…", "Has encontrado la palabra WHILE"],
-    ["Nel frattempo…", "Hai trovato la parola WHILE"],
+  YARN: copy(
+    ["Yarn Bandit", "You found the word YARN"],
+    ["Voleur de pelote", "Tu as trouvé le mot YARN"],
+    ["Garn-Dieb", "Du hast das Wort YARN gefunden"],
+    ["Ladrón de ovillos", "Has encontrado la palabra YARN"],
+    ["Ladro di gomitoli", "Hai trovato la parola YARN"],
   ),
-  THANKS: copy(
-    ["Polite Pack", "You found the word THANKS"],
-    ["Meute polie", "Tu as trouvé le mot THANKS"],
-    ["Höfliches Rudel", "Du hast das Wort THANKS gefunden"],
-    ["Manada educada", "Has encontrado la palabra THANKS"],
-    ["Branco educato", "Hai trovato la parola THANKS"],
+  PURR: copy(
+    ["Purr Machine", "You found the word PURR"],
+    ["Machine à ronron", "Tu as trouvé le mot PURR"],
+    ["Schnurr-Maschine", "Du hast das Wort PURR gefunden"],
+    ["Máquina de ronroneo", "Has encontrado la palabra PURR"],
+    ["Macchina delle fusa", "Hai trovato la parola PURR"],
   ),
-  FOREACH: copy(
-    ["Loop Legend", "You found the word FOREACH"],
-    ["Légende de boucle", "Tu as trouvé le mot FOREACH"],
-    ["Schleifen-Legende", "Du hast das Wort FOREACH gefunden"],
-    ["Leyenda del bucle", "Has encontrado la palabra FOREACH"],
-    ["Leggenda del ciclo", "Hai trovato la parola FOREACH"],
+  KITTY: copy(
+    ["Hello KITTY", "You found the word KITTY"],
+    ["Coucou KITTY", "Tu as trouvé le mot KITTY"],
+    ["Hallo KITTY", "Du hast das Wort KITTY gefunden"],
+    ["Hola KITTY", "Has encontrado la palabra KITTY"],
+    ["Ciao KITTY", "Hai trovato la parola KITTY"],
+  ),
+  TREAT: copy(
+    ["Treat Time", "You found the word TREAT"],
+    ["L’heure de la gâterie", "Tu as trouvé le mot TREAT"],
+    ["Leckerli-Zeit", "Du hast das Wort TREAT gefunden"],
+    ["Hora del premio", "Has encontrado la palabra TREAT"],
+    ["Ora del premio", "Hai trovato la parola TREAT"],
+  ),
+  KITTEN: copy(
+    ["Kitten Collector", "You found the word KITTEN"],
+    ["Collectionneur de chatons", "Tu as trouvé le mot KITTEN"],
+    ["Kätzchen-Sammler", "Du hast das Wort KITTEN gefunden"],
+    ["Coleccionista de gatitos", "Has encontrado la palabra KITTEN"],
+    ["Collezionista di gattini", "Hai trovato la parola KITTEN"],
+  ),
+  CATNIP: copy(
+    ["Catnip Crazy", "You found the word CATNIP"],
+    ["Fou de cataire", "Tu as trouvé le mot CATNIP"],
+    ["Katzenminze-Kick", "Du hast das Wort CATNIP gefunden"],
+    ["Loco por la hierba gatera", "Has encontrado la palabra CATNIP"],
+    ["Pazzo per l’erba gatta", "Hai trovato la parola CATNIP"],
+  ),
+  SCRATCH: copy(
+    ["Scratch Post", "You found the word SCRATCH"],
+    ["Griffoir", "Tu as trouvé le mot SCRATCH"],
+    ["Kratzbaum", "Du hast das Wort SCRATCH gefunden"],
+    ["Rascador", "Has encontrado la palabra SCRATCH"],
+    ["Tiragraffi", "Hai trovato la parola SCRATCH"],
+  ),
+  SUNBEAM: copy(
+    ["Sunbeam Nap", "You found the word SUNBEAM"],
+    ["Sieste au soleil", "Tu as trouvé le mot SUNBEAM"],
+    ["Sonnenstrahl-Nickerchen", "Du hast das Wort SUNBEAM gefunden"],
+    ["Siesta al sol", "Has encontrado la palabra SUNBEAM"],
+    ["Pisolino al sole", "Hai trovato la parola SUNBEAM"],
+  ),
+  WHISKERS: copy(
+    ["Whisker Wizard", "You found the word WHISKERS"],
+    ["Mage des moustaches", "Tu as trouvé le mot WHISKERS"],
+    ["Schnurrhaar-Zauberer", "Du hast das Wort WHISKERS gefunden"],
+    ["Mago de bigotes", "Has encontrado la palabra WHISKERS"],
+    ["Mago dei baffi", "Hai trovato la parola WHISKERS"],
+  ),
+  PURRFECT: copy(
+    ["Purrfect Spelling", "You found the word PURRFECT"],
+    ["Orthographe purrfaite", "Tu as trouvé le mot PURRFECT"],
+    ["Schnurrfekte Rechtschreibung", "Du hast das Wort PURRFECT gefunden"],
+    ["Ortografía purrfecta", "Has encontrado la palabra PURRFECT"],
+    ["Ortografia purrfetta", "Hai trovato la parola PURRFECT"],
+  ),
+  NYANYANYANYA: copy(
+    ["Nyan Nyan Nyan", "You found the word NYANYANYANYA"],
+    ["Nyan nyan nyan", "Tu as trouvé le mot NYANYANYANYA"],
+    ["Nyan nyan nyan", "Du hast das Wort NYANYANYANYA gefunden"],
+    ["Nyan nyan nyan", "Has encontrado la palabra NYANYANYANYA"],
+    ["Nyan nyan nyan", "Hai trovato la parola NYANYANYANYA"],
   ),
 };
 

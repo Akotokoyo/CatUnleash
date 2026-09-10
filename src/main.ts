@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import "./style.css";
+import { cloneCatModel, cloneDogModel, hasAnimalModels, loadAnimalModels } from "./animals";
 import { CityAudio } from "./audio";
 import {
   ENVIRONMENTS,
@@ -25,7 +26,6 @@ import {
 type RunState = "menu" | "running" | "gameover";
 type PickupType = "cat" | "tuna" | "dog" | "carrier" | "coin" | "hint" | "letter";
 type TutorialStep = "move" | "jump" | "coins" | "cat" | "dog" | "tuna" | "carrier";
-type AnimalKind = "cat" | "dog";
 type CollectEffect = Exclude<PickupType, "hint">;
 type CatPattern = "solid" | "tabby" | "bicolor" | "calico";
 type DogPattern = "spaniel" | "solid" | "mask";
@@ -102,6 +102,8 @@ const WORD_SCORE: Record<number, number> = {
   5: 1000,
   6: 2000,
   7: 4000,
+  8: 8000,
+  12: 16000,
 };
 const JUMP_VELOCITY = 10.4;
 const JUMP_GRAVITY = 22;
@@ -109,7 +111,7 @@ const LETTER_HEIGHT = 2.4;
 const LETTER_CATCH = 0.95;
 const ECONOMY_KEY = "catunleashed-economy";
 const CAT_COATS: CatCoat[] = [
-  { fur: 0xee9a40, pattern: "tabby", patch: 0xd07828 },
+  { fur: 0xee9a40, pattern: "bicolor", patch: 0xf6f1e8 },
   { fur: 0xf6f1e8, pattern: "solid" },
   { fur: 0x4a3c36, pattern: "solid" },
   { fur: 0xde6a38, pattern: "bicolor", patch: 0xf6f1e8 },
@@ -120,10 +122,12 @@ const CAT_COATS: CatCoat[] = [
 ];
 const DOG_COATS: DogCoat[] = [
   { fur: 0xc47a3a, belly: 0xf7f2ea, pattern: "solid" },
-  { fur: 0xe0b06a, belly: 0xfff3d8, pattern: "solid" },
-  { fur: 0x5c4036, belly: 0xf0e6d8, pattern: "solid" },
-  { fur: 0xd4a078, belly: 0xf6f1e8, pattern: "solid" },
-  { fur: 0x8a7a70, belly: 0xeee8e0, pattern: "solid" },
+  { fur: 0xe8c36a, belly: 0xfff6d8, pattern: "solid" },
+  { fur: 0x3f6a3a, belly: 0xdde8c8, pattern: "solid" },
+  { fur: 0x8aa4b8, belly: 0xe8f2f6, pattern: "solid" },
+  { fur: 0x3a3d6e, belly: 0xc5c8e8, pattern: "solid" },
+  { fur: 0xd4a04a, belly: 0xf8ecd0, pattern: "solid" },
+  { fur: 0xc44a9a, belly: 0xf5d0ea, pattern: "solid" },
 ];
 const gold = new THREE.MeshStandardMaterial({ color: 0xe8b83f, roughness: 0.42, metalness: 0.35 });
 const terracotta = new THREE.MeshStandardMaterial({ color: 0xac4f2d, roughness: 0.82 });
@@ -271,7 +275,6 @@ let swipeStartX = 0;
 let swipeStartY = 0;
 let toastTimer = 0;
 let environmentIndex = 0;
-let accessoryEnvironmentIndex = 0;
 let transitionTilesRemaining = 0;
 let environmentTransition: EnvironmentTransition | undefined;
 let language: Language = "en";
@@ -280,7 +283,7 @@ let paused = false;
 let resumeUntil = 0;
 let jumpY = 0;
 let jumpVelocity = 0;
-let runWord = WORD_POOL[0];
+let runWord: string = WORD_POOL[0];
 let letterCollected: boolean[] = [];
 let letterPending = false;
 let letterDelay = 0;
@@ -304,6 +307,9 @@ loadEconomy();
 setEnvironment(0);
 catCount = 1 + purchasedCats;
 rebuildPack();
+void loadAnimalModels().then(() => {
+  if (hasAnimalModels()) rebuildPack(true);
+});
 applyLanguage();
 bindControls();
 bindAppLifecycle();
@@ -338,7 +344,6 @@ function applyLanguage(): void {
 
 function setEnvironment(index: number): void {
   environmentIndex = index % ENVIRONMENTS.length;
-  accessoryEnvironmentIndex = environmentIndex;
   environmentTransition = undefined;
   transitionTilesRemaining = 0;
   const theme = getEnvironment(environmentIndex);
@@ -541,6 +546,11 @@ function addFurPatch(
 }
 
 function makeCat(coat: CatCoat = CAT_COATS[0]): THREE.Group {
+  const imported = cloneCatModel(coat);
+  if (imported) {
+    imported.userData.coat = coat;
+    return imported;
+  }
   const cat = new THREE.Group();
   const fur = toon(coat.fur);
   const innerEar = toon(0xf4a39a);
@@ -658,148 +668,6 @@ function makeCat(coat: CatCoat = CAT_COATS[0]): THREE.Group {
   return cat;
 }
 
-function addAnimalAccessory(animal: THREE.Group, kind: AnimalKind, worldIndex: number): void {
-  const worldId = getEnvironment(worldIndex).id;
-  const accessory = new THREE.Group();
-  accessory.name = "world-accessory";
-  const headY = kind === "cat" ? 1.46 : 1.42;
-  const headZ = kind === "cat" ? -0.04 : -0.04;
-  const faceY = kind === "cat" ? 1.04 : 1.06;
-  const faceZ = kind === "cat" ? -0.52 : -0.54;
-  const size = kind === "cat" ? 1.08 : 0.9;
-
-  if (worldId === "city") {
-    const red = new THREE.MeshStandardMaterial({ color: 0xe94f47, roughness: 0.72 });
-    const crown = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.18 * size, 0.23 * size, 0.18 * size, 8),
-      red,
-    );
-    crown.position.set(0, headY + 0.22 * size, headZ);
-    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.28 * size, 0.04, 0.18 * size), red);
-    brim.position.set(0, headY + 0.13, headZ - 0.21 * size);
-    accessory.add(crown, brim);
-  } else if (worldId === "country") {
-    const straw = new THREE.MeshStandardMaterial({ color: 0xe3bd58, roughness: 0.92 });
-    const brim = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.43 * size, 0.43 * size, 0.055, 12),
-      straw,
-    );
-    brim.position.set(0, headY + 0.05, headZ);
-    const crown = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.21 * size, 0.27 * size, 0.28 * size, 10),
-      straw,
-    );
-    crown.position.set(0, headY + 0.2 * size, headZ);
-    accessory.add(brim, crown);
-  } else if (worldId === "jungle") {
-    const leaves = new THREE.MeshStandardMaterial({ color: 0x2fa65a, roughness: 0.86 });
-    for (let index = -2; index <= 2; index += 1) {
-      const leaf = new THREE.Mesh(
-        new THREE.ConeGeometry(0.09 * size, 0.38 * size, 5),
-        leaves,
-      );
-      leaf.position.set(index * 0.1 * size, headY + 0.22 * size + Math.abs(index) * 0.02, headZ);
-      leaf.rotation.z = index * -0.22;
-      accessory.add(leaf);
-    }
-  } else if (worldId === "lab") {
-    const helmetShell = new THREE.MeshStandardMaterial({
-      color: 0x263d59,
-      roughness: 0.38,
-      metalness: 0.28,
-    });
-    const visorMaterial = new THREE.MeshStandardMaterial({
-      color: 0x65e8f2,
-      emissive: 0x167e8e,
-      emissiveIntensity: 0.55,
-      transparent: true,
-      opacity: 0.68,
-      roughness: 0.12,
-    });
-    const helmet = new THREE.Mesh(
-      new THREE.SphereGeometry(0.43 * size, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.68),
-      helmetShell,
-    );
-    helmet.position.set(0, headY - 0.13 * size, headZ);
-    const visor = new THREE.Mesh(
-      new THREE.BoxGeometry(0.56 * size, 0.24 * size, 0.045),
-      visorMaterial,
-    );
-    visor.position.set(0, faceY + 0.01, faceZ - 0.025);
-    const chinGuard = new THREE.Mesh(
-      new THREE.BoxGeometry(0.48 * size, 0.075, 0.09),
-      helmetShell,
-    );
-    chinGuard.position.set(0, faceY - 0.2 * size, faceZ - 0.035);
-    accessory.add(helmet, visor, chinGuard);
-  } else if (worldId === "space") {
-    const glass = new THREE.MeshStandardMaterial({
-      color: 0xbbeeff,
-      transparent: true,
-      opacity: 0.25,
-      roughness: 0.1,
-      depthWrite: false,
-    });
-    const helmet = new THREE.Mesh(
-      new THREE.SphereGeometry((kind === "cat" ? 0.62 : 0.52), 12, 8),
-      glass,
-    );
-    helmet.position.set(0, kind === "cat" ? 1.12 : 1.02, headZ);
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry((kind === "cat" ? 0.4 : 0.34), 0.05, 7, 16),
-      cream,
-    );
-    ring.rotation.x = Math.PI / 2;
-    ring.position.set(0, kind === "cat" ? 0.68 : 0.62, headZ + 0.04);
-    const backpack = new THREE.Mesh(
-      new THREE.BoxGeometry(0.42 * size, 0.42 * size, 0.18),
-      cream,
-    );
-    backpack.position.set(0, kind === "cat" ? 0.46 : 0.42, 0.38);
-    accessory.add(helmet, ring, backpack);
-  } else if (worldId === "egypt") {
-    const blue = new THREE.MeshStandardMaterial({ color: 0x225fa8, roughness: 0.6 });
-    const crown = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.18 * size, 0.29 * size, 0.35 * size, 8),
-      gold,
-    );
-    crown.position.set(0, headY + 0.23 * size, headZ);
-    for (const x of [-0.31, 0.31]) {
-      const flap = new THREE.Mesh(new THREE.BoxGeometry(0.14 * size, 0.52 * size, 0.09), blue);
-      flap.position.set(x * size, headY - 0.2 * size, headZ);
-      flap.rotation.z = x < 0 ? -0.13 : 0.13;
-      accessory.add(flap);
-    }
-    accessory.add(crown);
-  } else {
-    const glow = new THREE.MeshStandardMaterial({
-      color: 0xff58db,
-      emissive: 0xff30cc,
-      emissiveIntensity: 1.1,
-    });
-    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.36 * size, 0.04, 7, 18), glow);
-    halo.rotation.x = Math.PI / 2;
-    halo.position.set(0, headY + 0.43 * size, headZ);
-    const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.1 * size), glow);
-    crystal.position.set(0, headY + 0.66 * size, headZ);
-    accessory.add(halo, crystal);
-  }
-
-  accessory.traverse((object) => {
-    if (object instanceof THREE.Mesh) object.castShadow = true;
-  });
-  const accessoryMeshes: THREE.Mesh[] = [];
-  accessory.traverse((object) => {
-    if (object instanceof THREE.Mesh) accessoryMeshes.push(object);
-  });
-  for (const mesh of accessoryMeshes) {
-    const material = mesh.material;
-    if (Array.isArray(material) || material.transparent) continue;
-    addInk(mesh, 1.07);
-  }
-  animal.add(accessory);
-}
-
 function layoutPackCat(cat: THREE.Object3D, index: number): void {
   if (index === 0) {
     cat.scale.setScalar(1.12);
@@ -817,7 +685,6 @@ function layoutPackCat(cat: THREE.Object3D, index: number): void {
 
 function addPackCat(index: number): void {
   const cat = makeCat(CAT_COATS[index % CAT_COATS.length]);
-  addAnimalAccessory(cat, "cat", accessoryEnvironmentIndex);
   layoutPackCat(cat, index);
   playerRoot.add(cat);
 }
@@ -850,7 +717,6 @@ function makeRecruitCat(): THREE.Group {
   const cat = makeCat(coat);
   cat.rotation.y = Math.PI;
   cat.scale.setScalar(0.92);
-  addAnimalAccessory(cat, "cat", accessoryEnvironmentIndex);
   group.add(cat);
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(0.72, 0.065, 7, 20),
@@ -1109,6 +975,11 @@ function makeTaperedCarrierShell(): THREE.BufferGeometry {
 }
 
 function makeDog(coat: DogCoat = DOG_COATS[0]): THREE.Group {
+  const imported = cloneDogModel(coat);
+  if (imported) {
+    imported.userData.coat = coat;
+    return imported;
+  }
   const dog = new THREE.Group();
   const fur = toon(coat.fur);
   const belly = toon(coat.belly);
@@ -1189,10 +1060,9 @@ function makeDog(coat: DogCoat = DOG_COATS[0]): THREE.Group {
 
 function makeDogPack(strength: number): THREE.Group {
   const group = new THREE.Group();
-  const dog = makeDog(DOG_COATS[(strength - 1) % DOG_COATS.length]);
-  addAnimalAccessory(dog, "dog", accessoryEnvironmentIndex);
+  const dog = makeDog(DOG_COATS[(Math.max(1, level) - 1) % DOG_COATS.length]);
   dog.rotation.y = Math.PI;
-  dog.position.set(0, 0.08, 0);
+  dog.position.set(0, dog.userData.kenney ? 0 : 0.08, 0);
   group.add(dog);
   const badge = makeBadge(`−${strength}`);
   badge.position.set(0, 2.05, 0);
@@ -2133,33 +2003,18 @@ function moveWorld(travel: number): void {
       decor.position.z = wrappedZ;
     }
   }
-  syncAccessoriesWithCurrentTrack();
   const theme = getEnvironment(environmentIndex);
   const baseIntensity = theme.id === "space" || theme.id === "dimension" ? 1.8 : 2.9;
   sun.intensity = baseIntensity + Math.sin(elapsed * 0.35) * 0.2;
   decorRoot.rotation.z = Math.sin(elapsed * 0.18) * 0.0015;
 }
 
-function syncAccessoriesWithCurrentTrack(): void {
-  let currentTile: THREE.Group | undefined;
-  let closestDistance = Number.POSITIVE_INFINITY;
-  for (const tile of trackTiles) {
-    const tileDistance = Math.abs(tile.position.z - PLAYER_Z);
-    if (tileDistance >= closestDistance) continue;
-    closestDistance = tileDistance;
-    currentTile = tile;
-  }
-  const currentEnvironment = currentTile?.userData.environmentIndex;
-  if (typeof currentEnvironment !== "number" || currentEnvironment === accessoryEnvironmentIndex) return;
-  accessoryEnvironmentIndex = currentEnvironment;
-  rebuildPack(true);
-}
-
 function updatePack(delta: number): void {
   playerRoot.position.x = damp(playerRoot.position.x, targetX, 11, delta);
   playerRoot.children.forEach((cat, index) => {
     const phase = Number(cat.userData.phase ?? 0);
-    cat.position.y = 0.55 + Math.abs(Math.sin(stridePhase + phase)) * 0.2;
+    const ground = cat.userData.kenney ? 0.08 : 0.55;
+    cat.position.y = ground + Math.abs(Math.sin(stridePhase + phase)) * 0.2;
     cat.rotation.z = Math.sin(stridePhase + phase) * 0.05;
     const tail = cat.getObjectByName("tail");
     if (tail) tail.rotation.z = -0.4 + Math.sin(stridePhase * 2.2 + index) * 0.28;

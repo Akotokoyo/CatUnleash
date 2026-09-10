@@ -101,15 +101,16 @@ body {
 .word-track {
   flex: 1 1 100%;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   padding-top: 2px;
 }
 
 .word-letter {
-  min-width: 26px;
-  height: 30px;
-  padding: 0 6px;
+  min-width: 22px;
+  height: 28px;
+  padding: 0 4px;
   display: grid;
   place-items: center;
   color: #ffe9a8;
@@ -321,6 +322,23 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
   box-sizing: border-box;
 }
 
+.menu-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin: 2px 0 2px;
+}
+
+.menu-actions .sun-button,
+.menu-actions .menu-button {
+  margin: 0;
+}
+
+.menu-actions .sun-button {
+  margin-bottom: 6px;
+}
+
 .menu-button {
   display: block;
   margin: 16px auto 0;
@@ -334,8 +352,6 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 }
 
 .menu-button:active { transform: translateY(2px); }
-
-.tutorial-replay { margin-top: 8px; }
 
 #tutorial {
   position: absolute;
