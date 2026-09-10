@@ -285,6 +285,7 @@ let totalRuns = 0;
 let achievementQueue: string[] = [];
 let achievementToastTimer = 0;
 let tutorialActive = false;
+let tutorialRun = false;
 let tutorialStep: TutorialStep = "move";
 let tutorialArmed = false;
 let tutorialDelay = 0;
@@ -1539,6 +1540,7 @@ function startRun(asTutorial = false): void {
   clearObjects();
   state = "running";
   tutorialActive = asTutorial;
+  tutorialRun = asTutorial;
   laneIndex = 1;
   targetX = LANES[laneIndex];
   if (asTutorial) {
@@ -1561,8 +1563,6 @@ function startRun(asTutorial = false): void {
     pickRunWord();
     ui.wordTrack.classList.remove("hidden");
     ui.tutorial.classList.add("hidden");
-    checkBiscuitAchievements();
-    checkCatAchievements();
   }
   distance = 0;
   killScore = 0;
@@ -1579,6 +1579,10 @@ function startRun(asTutorial = false): void {
   jumpY = 0;
   jumpVelocity = 0;
   playerRoot.position.y = 0;
+  if (!asTutorial) {
+    checkBiscuitAchievements();
+    checkCatAchievements();
+  }
   saveEconomy();
   setEnvironment(0);
   rebuildPack();
@@ -1692,7 +1696,7 @@ function scoreValue(): number {
 }
 
 function unlockAchievement(id: string): void {
-  if (tutorialActive || unlockedAchievements.has(id) || !achievementById(id)) return;
+  if (tutorialActive || tutorialRun || unlockedAchievements.has(id) || !achievementById(id)) return;
   unlockedAchievements.add(id);
   saveEconomy();
   achievementQueue.push(id);
@@ -1723,6 +1727,7 @@ function showNextAchievement(): void {
 }
 
 function checkScoreAchievements(): void {
+  if (tutorialActive) return;
   const score = scoreValue();
   for (const threshold of SCORE_ACHIEVEMENT_THRESHOLDS) {
     if (score > threshold) unlockAchievement(`score-${threshold}`);
@@ -1730,24 +1735,28 @@ function checkScoreAchievements(): void {
 }
 
 function checkCatAchievements(): void {
+  if (tutorialActive) return;
   for (const threshold of CAT_ACHIEVEMENT_THRESHOLDS) {
     if (lifetimeCats >= threshold) unlockAchievement(`cats-${threshold}`);
   }
 }
 
 function checkBiscuitAchievements(): void {
+  if (tutorialActive) return;
   for (const threshold of BISCUIT_ACHIEVEMENT_THRESHOLDS) {
     if (lifetimeBiscuits >= threshold) unlockAchievement(`biscuits-${threshold}`);
   }
 }
 
 function checkLevelAchievements(): void {
+  if (tutorialActive) return;
   for (const threshold of LEVEL_ACHIEVEMENT_THRESHOLDS) {
     if (level >= threshold) unlockAchievement(`level-${threshold}`);
   }
 }
 
 function checkRunAchievements(): void {
+  if (tutorialActive) return;
   for (const threshold of RUN_ACHIEVEMENT_THRESHOLDS) {
     if (totalRuns >= threshold) unlockAchievement(`runs-${threshold}`);
   }
@@ -1973,7 +1982,7 @@ function update(time: number): void {
     }
     ui.score.textContent = String(scoreValue());
     ui.speed.textContent = `${(speed / 12).toFixed(1)}×`;
-    checkScoreAchievements();
+    if (!tutorialActive && !tutorialRun && state === "running") checkScoreAchievements();
   } else {
     moveWorld(2.3 * delta);
     stridePhase += delta * 2.3 * 0.34;
@@ -2115,7 +2124,7 @@ function collect(object: RunnerObject): void {
         killScore += bonus;
         audio.victory();
         showToast(t("toast.word", { word: runWord, score: bonus }), "letter");
-        unlockAchievement(`word-${runWord}`);
+        if (!tutorialActive) unlockAchievement(`word-${runWord}`);
       } else {
         showToast(t("toast.letter", { letter: object.glyph ?? "" }), "letter");
       }
@@ -2124,13 +2133,15 @@ function collect(object: RunnerObject): void {
   }
   if (type === "coin") {
     wallet += 1;
-    lifetimeBiscuits += 1;
+    if (!tutorialActive) {
+      lifetimeBiscuits += 1;
+      checkBiscuitAchievements();
+    }
     killScore += SCORE_COIN;
     audio.pickup(true);
     updateWalletUi();
     saveEconomy();
     showToast(t("toast.coin"), "coin");
-    checkBiscuitAchievements();
     if (tutorialActive && tutorialStep === "coins") advanceTutorial();
     return;
   }
