@@ -471,6 +471,88 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
   content: "";
 }
 
+#achievement-toast {
+  position: absolute;
+  z-index: 9;
+  top: max(12px, env(safe-area-inset-top));
+  left: 10px;
+  width: min(260px, calc(100% - 20px));
+  padding: 10px 12px;
+  color: #fff6d4;
+  text-align: left;
+  pointer-events: none;
+  background: #0c2c2af5;
+  border: 2px solid #d6a53a;
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 2px #28685c, 0 8px 22px #0008;
+  transform: translateX(-12px);
+  opacity: 0;
+  transition: opacity .22s, transform .22s;
+}
+
+#achievement-toast.show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+#achievement-toast p {
+  margin: 0;
+  color: #e6bd54;
+  font: 700 10px/1 "Cinzel", serif;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+#achievement-toast strong {
+  display: block;
+  margin: 4px 0 2px;
+  font: 800 16px/1.15 "Baloo 2", sans-serif;
+}
+
+#achievement-toast span {
+  display: block;
+  color: #b7ded1;
+  font: 700 12px/1.25 "Baloo 2", sans-serif;
+}
+
+.ach-progress {
+  margin: 4px 0 10px;
+  color: #e6bd54;
+  font: 700 12px "Cinzel", serif;
+  letter-spacing: .12em;
+}
+
+.ach-list {
+  max-height: min(46vh, 360px);
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+  text-align: left;
+}
+
+.ach-item {
+  padding: 8px 10px;
+  background: #071f1ec9;
+  border: 1px solid #367d69;
+  border-radius: 10px;
+}
+
+.ach-item.locked { opacity: .45; }
+
+.ach-item strong {
+  display: block;
+  color: #ffe47b;
+  font: 800 14px/1.2 "Baloo 2", sans-serif;
+}
+
+.ach-item span {
+  display: block;
+  margin-top: 2px;
+  color: #a9cfc4;
+  font-size: 12px;
+}
+
 #toast {
   position: absolute;
   z-index: 7;
@@ -685,6 +767,15 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
   }
 
   #toast { font-size: 18px; }
+
+  #achievement-toast {
+    left: 6px;
+    width: min(220px, calc(100% - 12px));
+    padding: 8px 9px;
+  }
+
+  #achievement-toast strong { font-size: 14px; }
+  .ach-list { max-height: 38vh; }
 }
 
 @container stage (max-height: 540px) {

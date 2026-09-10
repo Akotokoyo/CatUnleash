@@ -11,6 +11,16 @@ import {
   makeEnvironmentTrack,
 } from "./environments";
 import { translate, translations, type Language, type TranslationKey } from "./i18n";
+import {
+  ACHIEVEMENTS,
+  BISCUIT_ACHIEVEMENT_THRESHOLDS,
+  CAT_ACHIEVEMENT_THRESHOLDS,
+  LEVEL_ACHIEVEMENT_THRESHOLDS,
+  RUN_ACHIEVEMENT_THRESHOLDS,
+  SCORE_ACHIEVEMENT_THRESHOLDS,
+  WORD_POOL,
+  achievementById,
+} from "./achievements";
 
 type RunState = "menu" | "running" | "gameover";
 type PickupType = "cat" | "tuna" | "dog" | "carrier" | "coin" | "hint" | "letter";
@@ -86,7 +96,6 @@ const SCORE_COIN = 5;
 const SCORE_CAT = 15;
 const SCORE_TUNA = 10;
 const SCORE_DOG = -20;
-const WORD_POOL = ["CAT", "FOOD", "WHILE", "THANKS", "FOREACH"];
 const WORD_SCORE: Record<number, number> = {
   3: 200,
   4: 500,
@@ -177,6 +186,14 @@ const ui = {
   tutorialText: mustElement("tutorial-text"),
   tutorialSkip: mustElement<HTMLButtonElement>("tutorial-skip"),
   tutorialReplay: mustElement<HTMLButtonElement>("tutorial-replay"),
+  achievements: mustElement("achievements"),
+  achievementsOpen: mustElement<HTMLButtonElement>("achievements-open"),
+  achievementsBack: mustElement<HTMLButtonElement>("achievements-back"),
+  achList: mustElement("ach-list"),
+  achProgress: mustElement("ach-progress"),
+  achievementToast: mustElement("achievement-toast"),
+  achievementTitle: mustElement("achievement-title"),
+  achievementDesc: mustElement("achievement-desc"),
 };
 
 const renderer = new THREE.WebGLRenderer({
@@ -261,6 +278,12 @@ let letterCollected: boolean[] = [];
 let letterPending = false;
 let letterDelay = 0;
 let tutorialDone = false;
+let unlockedAchievements = new Set<string>();
+let lifetimeCats = 0;
+let lifetimeBiscuits = 0;
+let totalRuns = 0;
+let achievementQueue: string[] = [];
+let achievementToastTimer = 0;
 let tutorialActive = false;
 let tutorialStep: TutorialStep = "move";
 let tutorialArmed = false;
@@ -300,6 +323,7 @@ function applyLanguage(): void {
   refreshShopUi();
   updateWalletUi();
   updateWordHud();
+  renderAchievements();
   if (tutorialActive) setTutorialPrompt();
 }
 
@@ -1537,6 +1561,8 @@ function startRun(asTutorial = false): void {
     pickRunWord();
     ui.wordTrack.classList.remove("hidden");
     ui.tutorial.classList.add("hidden");
+    checkBiscuitAchievements();
+    checkCatAchievements();
   }
   distance = 0;
   killScore = 0;
@@ -1561,6 +1587,7 @@ function startRun(asTutorial = false): void {
   playerRoot.position.x = targetX;
   ui.menu.classList.add("hidden");
   ui.gameover.classList.add("hidden");
+  ui.achievements.classList.add("hidden");
   ui.hud.classList.remove("hidden");
   audio.start();
   if (!asTutorial) showToast(t("toast.run"));
@@ -1626,8 +1653,10 @@ function continueRun(): void {
 }
 
 function endRun(): void {
+  const fromTutorial = tutorialActive;
   hideTutorialUi();
   state = "gameover";
+  if (!fromTutorial) recordRunEnd();
   ui.hud.classList.add("hidden");
   ui.finalScore.textContent = String(scoreValue());
   ui.finalDistance.textContent = `${Math.floor(distance)}m`;
@@ -1653,12 +1682,114 @@ function returnToMenu(): void {
   refreshContinueUi();
   ui.hud.classList.add("hidden");
   ui.gameover.classList.add("hidden");
+  ui.achievements.classList.add("hidden");
   ui.menu.classList.remove("hidden");
   audio.pause();
 }
 
 function scoreValue(): number {
   return Math.max(0, Math.floor(distance * 10 + killScore));
+}
+
+function unlockAchievement(id: string): void {
+  if (tutorialActive || unlockedAchievements.has(id) || !achievementById(id)) return;
+  unlockedAchievements.add(id);
+  saveEconomy();
+  achievementQueue.push(id);
+  if (achievementQueue.length === 1) showNextAchievement();
+}
+
+function showNextAchievement(): void {
+  const id = achievementQueue[0];
+  const def = id ? achievementById(id) : undefined;
+  if (!def) {
+    achievementQueue.shift();
+    if (achievementQueue.length > 0) showNextAchievement();
+    return;
+  }
+  ui.achievementTitle.textContent = def.title[language];
+  ui.achievementDesc.textContent = def.description[language];
+  ui.achievementToast.classList.remove("hidden");
+  ui.achievementToast.classList.add("show");
+  window.clearTimeout(achievementToastTimer);
+  achievementToastTimer = window.setTimeout(() => {
+    ui.achievementToast.classList.remove("show");
+    window.setTimeout(() => {
+      ui.achievementToast.classList.add("hidden");
+      achievementQueue.shift();
+      if (achievementQueue.length > 0) showNextAchievement();
+    }, 240);
+  }, 3200);
+}
+
+function checkScoreAchievements(): void {
+  const score = scoreValue();
+  for (const threshold of SCORE_ACHIEVEMENT_THRESHOLDS) {
+    if (score > threshold) unlockAchievement(`score-${threshold}`);
+  }
+}
+
+function checkCatAchievements(): void {
+  for (const threshold of CAT_ACHIEVEMENT_THRESHOLDS) {
+    if (lifetimeCats >= threshold) unlockAchievement(`cats-${threshold}`);
+  }
+}
+
+function checkBiscuitAchievements(): void {
+  for (const threshold of BISCUIT_ACHIEVEMENT_THRESHOLDS) {
+    if (lifetimeBiscuits >= threshold) unlockAchievement(`biscuits-${threshold}`);
+  }
+}
+
+function checkLevelAchievements(): void {
+  for (const threshold of LEVEL_ACHIEVEMENT_THRESHOLDS) {
+    if (level >= threshold) unlockAchievement(`level-${threshold}`);
+  }
+}
+
+function checkRunAchievements(): void {
+  for (const threshold of RUN_ACHIEVEMENT_THRESHOLDS) {
+    if (totalRuns >= threshold) unlockAchievement(`runs-${threshold}`);
+  }
+}
+
+function recordRunEnd(): void {
+  totalRuns += 1;
+  unlockAchievement("death-first");
+  if (distance < 18 || runTime < 4) unlockAchievement("death-instant");
+  checkScoreAchievements();
+  checkLevelAchievements();
+  checkRunAchievements();
+  saveEconomy();
+}
+
+function renderAchievements(): void {
+  const unlocked = ACHIEVEMENTS.filter((item) => unlockedAchievements.has(item.id)).length;
+  ui.achProgress.textContent = t("ach.progress", { unlocked, total: ACHIEVEMENTS.length });
+  ui.achList.replaceChildren(
+    ...ACHIEVEMENTS.map((item) => {
+      const row = document.createElement("div");
+      const got = unlockedAchievements.has(item.id);
+      row.className = got ? "ach-item" : "ach-item locked";
+      const title = document.createElement("strong");
+      title.textContent = item.title[language];
+      const desc = document.createElement("span");
+      desc.textContent = item.description[language];
+      row.append(title, desc);
+      return row;
+    }),
+  );
+}
+
+function openAchievements(): void {
+  renderAchievements();
+  ui.menu.classList.add("hidden");
+  ui.achievements.classList.remove("hidden");
+}
+
+function closeAchievements(): void {
+  ui.achievements.classList.add("hidden");
+  ui.menu.classList.remove("hidden");
 }
 
 function clearObjects(): void {
@@ -1690,6 +1821,8 @@ function shiftLane(direction: number): void {
 function bindControls(): void {
   ui.play.addEventListener("click", () => startRun(!tutorialDone));
   ui.tutorialReplay.addEventListener("click", () => startRun(true));
+  ui.achievementsOpen.addEventListener("click", openAchievements);
+  ui.achievementsBack.addEventListener("click", closeAchievements);
   ui.tutorialSkip.addEventListener("click", skipTutorial);
   ui.restart.addEventListener("click", () => startRun(false));
   ui.continueRun.addEventListener("click", continueRun);
@@ -1836,9 +1969,11 @@ function update(time: number): void {
         world: t(getEnvironment(environmentIndex).nameKey),
       }));
       audio.victory();
+      checkLevelAchievements();
     }
     ui.score.textContent = String(scoreValue());
     ui.speed.textContent = `${(speed / 12).toFixed(1)}×`;
+    checkScoreAchievements();
   } else {
     moveWorld(2.3 * delta);
     stridePhase += delta * 2.3 * 0.34;
@@ -1980,6 +2115,7 @@ function collect(object: RunnerObject): void {
         killScore += bonus;
         audio.victory();
         showToast(t("toast.word", { word: runWord, score: bonus }), "letter");
+        unlockAchievement(`word-${runWord}`);
       } else {
         showToast(t("toast.letter", { letter: object.glyph ?? "" }), "letter");
       }
@@ -1988,17 +2124,23 @@ function collect(object: RunnerObject): void {
   }
   if (type === "coin") {
     wallet += 1;
+    lifetimeBiscuits += 1;
     killScore += SCORE_COIN;
     audio.pickup(true);
     updateWalletUi();
     saveEconomy();
     showToast(t("toast.coin"), "coin");
+    checkBiscuitAchievements();
     if (tutorialActive && tutorialStep === "coins") advanceTutorial();
     return;
   }
   if (object.type === "cat") {
     catCount += 1;
     killScore += SCORE_CAT;
+    if (!tutorialActive) {
+      lifetimeCats += 1;
+      checkCatAchievements();
+    }
     rebuildPack();
     audio.meow();
     showToast(t("toast.cat"), "cat");
@@ -2107,12 +2249,27 @@ function loadEconomy(): void {
       cats?: number;
       language?: string;
       tutorialDone?: boolean;
+      achievements?: string[];
+      lifetimeCats?: number;
+      lifetimeBiscuits?: number;
+      totalRuns?: number;
     };
     wallet = Math.max(0, Math.floor(Number(saved.coins) || 0));
     bankedLives = Math.max(0, Math.floor(Number(saved.lives) || 0));
     purchasedCats = Math.max(0, Math.floor(Number(saved.cats) || 0));
     language = isLanguage(saved.language) ? saved.language : "en";
     tutorialDone = Boolean(saved.tutorialDone);
+    unlockedAchievements = new Set(
+      Array.isArray(saved.achievements)
+        ? saved.achievements.filter((id): id is string => typeof id === "string")
+        : [],
+    );
+    lifetimeCats = Math.max(0, Math.floor(Number(saved.lifetimeCats) || 0));
+    lifetimeBiscuits = Math.max(
+      wallet,
+      Math.max(0, Math.floor(Number(saved.lifetimeBiscuits) || 0)),
+    );
+    totalRuns = Math.max(0, Math.floor(Number(saved.totalRuns) || 0));
   } catch {
     wallet = 0;
     bankedLives = 0;
@@ -2128,6 +2285,10 @@ function saveEconomy(): void {
     cats: purchasedCats,
     language,
     tutorialDone,
+    achievements: [...unlockedAchievements],
+    lifetimeCats,
+    lifetimeBiscuits,
+    totalRuns,
   }));
 }
 
