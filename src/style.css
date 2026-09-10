@@ -98,6 +98,36 @@ body {
 .hud-stat.lives strong { color: #ff8b78; }
 .hud-stat.coins strong { color: #ffe27a; }
 
+.word-track {
+  flex: 1 1 100%;
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  padding-top: 2px;
+}
+
+.word-letter {
+  min-width: 26px;
+  height: 30px;
+  padding: 0 6px;
+  display: grid;
+  place-items: center;
+  color: #ffe9a8;
+  font: 800 16px/1 "Baloo 2", sans-serif;
+  letter-spacing: .04em;
+  background: #0c2c2acc;
+  border: 2px solid #8a6a2c;
+  border-radius: 8px;
+  opacity: .55;
+}
+
+.word-letter.collected {
+  color: #1a2418;
+  background: linear-gradient(#ffe27a, #d7a93b);
+  border-color: #fff1b1;
+  opacity: 1;
+}
+
 .panel {
   position: absolute;
   z-index: 5;
@@ -357,6 +387,7 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 .collect-burst.coin { --fx-color: #d4a066; }
 .collect-burst.dog { --fx-color: #ff795f; }
 .collect-burst.carrier { --fx-color: #ff3f63; }
+.collect-burst.letter { --fx-color: #ffe27a; }
 
 .collect-flash {
   position: absolute;
@@ -433,6 +464,7 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
 #toast.collect-message.coin { color: #e2b07a; }
 #toast.collect-message.dog { color: #ff8a72; }
 #toast.collect-message.carrier { color: #ff5875; }
+#toast.collect-message.letter { color: #ffe27a; }
 
 @keyframes collect-flash {
   0% { opacity: 0; transform: scale(.35); }
@@ -507,6 +539,15 @@ h2 { font-size: clamp(32px, 9vw, 54px); letter-spacing: 0; }
   .hud-stat strong {
     margin-top: 2px;
     font-size: 13px;
+  }
+
+  .word-letter {
+    min-width: 20px;
+    height: 24px;
+    padding: 0 4px;
+    font-size: 13px;
+    border-width: 1px;
+    border-radius: 6px;
   }
 
   .panel {

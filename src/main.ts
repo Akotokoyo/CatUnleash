@@ -13,7 +13,7 @@ import {
 import { translate, translations, type Language, type TranslationKey } from "./i18n";
 
 type RunState = "menu" | "running" | "gameover";
-type PickupType = "cat" | "tuna" | "dog" | "carrier" | "coin" | "hint";
+type PickupType = "cat" | "tuna" | "dog" | "carrier" | "coin" | "hint" | "letter";
 type AnimalKind = "cat" | "dog";
 type CollectEffect = Exclude<PickupType, "hint">;
 type CatPattern = "solid" | "tabby" | "bicolor" | "calico";
@@ -46,6 +46,8 @@ interface ContinueSnapshot {
   nextSpawn: number;
   runTime: number;
   stridePhase: number;
+  runWord: string;
+  letterCollected: boolean[];
 }
 
 interface RunnerObject {
@@ -54,6 +56,8 @@ interface RunnerObject {
   lane: number;
   strength: number;
   phase: number;
+  glyph?: string;
+  letterIndex?: number;
 }
 
 interface EnvironmentTransition {
@@ -81,6 +85,18 @@ const SCORE_COIN = 5;
 const SCORE_CAT = 15;
 const SCORE_TUNA = 10;
 const SCORE_DOG = -20;
+const WORD_POOL = ["CAT", "FOOD", "WHILE", "THANKS", "FOREACH"];
+const WORD_SCORE: Record<number, number> = {
+  3: 200,
+  4: 500,
+  5: 1000,
+  6: 2000,
+  7: 4000,
+};
+const JUMP_VELOCITY = 10.4;
+const JUMP_GRAVITY = 22;
+const LETTER_HEIGHT = 2.4;
+const LETTER_CATCH = 0.95;
 const ECONOMY_KEY = "catunleashed-economy";
 const CAT_COATS: CatCoat[] = [
   { fur: 0xee9a40, pattern: "tabby", patch: 0xd07828 },
@@ -155,6 +171,7 @@ const ui = {
   finalCoins: mustElement("final-coins"),
   collectFx: mustElement("collect-fx"),
   toast: mustElement("toast"),
+  wordTrack: mustElement("word-track"),
 };
 
 const renderer = new THREE.WebGLRenderer({
@@ -224,6 +241,7 @@ let runTime = 0;
 let stridePhase = 0;
 let invulnerableUntil = 0;
 let swipeStartX = 0;
+let swipeStartY = 0;
 let toastTimer = 0;
 let environmentIndex = 0;
 let accessoryEnvironmentIndex = 0;
@@ -231,6 +249,12 @@ let transitionTilesRemaining = 0;
 let environmentTransition: EnvironmentTransition | undefined;
 let language: Language = "en";
 let lastFrameTime = 0;
+let jumpY = 0;
+let jumpVelocity = 0;
+let runWord = WORD_POOL[0];
+let letterCollected: boolean[] = [];
+let letterPending = false;
+let letterDelay = 0;
 
 loadEconomy();
 setEnvironment(0);
@@ -262,6 +286,7 @@ function applyLanguage(): void {
   ui.sound.setAttribute("aria-label", t("sound.label"));
   refreshShopUi();
   updateWalletUi();
+  updateWordHud();
 }
 
 function setEnvironment(index: number): void {
@@ -466,42 +491,6 @@ function addFurPatch(
   patch.position.set(x, y, z);
   patch.scale.set(sx, sy, sz);
   parent.add(patch);
-}
-
-function addChibiFace(
-  parent: THREE.Group,
-  eyeX: number,
-  eyeY: number,
-  faceZ: number,
-  eyeSize: number,
-  nose: "pink" | "black",
-): void {
-  for (const x of [-eyeX, eyeX]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(eyeSize, 12, 10), catInk);
-    eye.scale.set(0.92, 1.08, 0.28);
-    eye.position.set(x, eyeY, faceZ);
-    parent.add(eye);
-    const shine = new THREE.Mesh(new THREE.SphereGeometry(eyeSize * 0.32, 6, 5), eyeWhite);
-    shine.position.set(x - eyeSize * 0.35, eyeY + eyeSize * 0.42, faceZ - 0.05);
-    parent.add(shine);
-    const blush = new THREE.Mesh(new THREE.SphereGeometry(eyeSize * 0.82, 8, 6), toon(0xf4a4b0));
-    blush.scale.set(1.25, 0.55, 0.28);
-    blush.position.set(x * 1.7, eyeY - eyeSize * 1.4, faceZ + 0.1);
-    parent.add(blush);
-  }
-  const noseMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(nose === "pink" ? 0.035 : 0.042, 8, 6),
-    nose === "pink" ? catNose : catInk,
-  );
-  noseMesh.scale.set(1.15, 0.72, 0.8);
-  noseMesh.position.set(0, eyeY - eyeSize * 1.15, faceZ - 0.02);
-  parent.add(noseMesh);
-  for (const x of [-0.038, 0.038]) {
-    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.032, 0.01, 5, 8, Math.PI), catInk);
-    mouth.position.set(x, eyeY - eyeSize * 1.55, faceZ - 0.01);
-    mouth.rotation.set(Math.PI * 0.12, 0, x < 0 ? 0.45 : -0.45);
-    parent.add(mouth);
-  }
 }
 
 function makeCat(coat: CatCoat = CAT_COATS[0]): THREE.Group {
@@ -1172,6 +1161,36 @@ function makeBadge(value: string | number): THREE.Sprite {
   return sprite;
 }
 
+function makeLetterToken(glyph: string): THREE.Group {
+  const group = new THREE.Group();
+  const letterCanvas = document.createElement("canvas");
+  letterCanvas.width = 256;
+  letterCanvas.height = 256;
+  const context = letterCanvas.getContext("2d");
+  if (!context) throw new Error("Canvas 2D non disponibile");
+  context.fillStyle = "#143834";
+  context.beginPath();
+  context.arc(128, 128, 116, 0, Math.PI * 2);
+  context.fill();
+  context.strokeStyle = "#e8b83f";
+  context.lineWidth = 14;
+  context.stroke();
+  context.fillStyle = "#fff6d8";
+  context.font = "bold 132px sans-serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(glyph, 128, 140);
+  const map = new THREE.CanvasTexture(letterCanvas);
+  map.needsUpdate = true;
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map, transparent: true, depthWrite: false }),
+  );
+  sprite.scale.set(1.65, 1.65, 1);
+  sprite.renderOrder = 11;
+  group.add(sprite);
+  return group;
+}
+
 function objectsNear(lane: number, z: number, radius: number, types: PickupType[]): boolean {
   return objects.some(
     (object) =>
@@ -1263,7 +1282,13 @@ function spawnRecommendedPath(blocked: Set<number>, rewards: Set<number>): void 
   lastHintLane = biscuitLane;
 }
 
-function spawnObject(type: PickupType, lane: number, strength: number, z = -86 - Math.random() * 4): void {
+function spawnObject(
+  type: PickupType,
+  lane: number,
+  strength: number,
+  z = -86 - Math.random() * 4,
+  extra?: { glyph: string; letterIndex: number },
+): void {
   const mesh =
     type === "cat"
       ? makeRecruitCat()
@@ -1275,15 +1300,93 @@ function spawnObject(type: PickupType, lane: number, strength: number, z = -86 -
             ? makeCoin()
             : type === "hint"
               ? makePathHint()
-              : makeDogPack(strength);
-  mesh.position.set(LANES[lane], type === "hint" ? 0.02 : 0.3, z);
+              : type === "letter"
+                ? makeLetterToken(extra?.glyph ?? "?")
+                : makeDogPack(strength);
+  const y = type === "hint" ? 0.02 : type === "letter" ? LETTER_HEIGHT : 0.3;
+  mesh.position.set(LANES[lane], y, z);
   objectRoot.add(mesh);
-  objects.push({ mesh, type, lane, strength, phase: Math.random() * Math.PI * 2 });
+  objects.push({
+    mesh,
+    type,
+    lane,
+    strength,
+    phase: Math.random() * Math.PI * 2,
+    glyph: extra?.glyph,
+    letterIndex: extra?.letterIndex,
+  });
 }
 
 function randomStrength(): number {
   const maximum = Math.min(8, 2 + level);
   return 1 + Math.floor(Math.random() * maximum);
+}
+
+function wordBonus(length: number): number {
+  return WORD_SCORE[length] ?? 0;
+}
+
+function pickRunWord(): void {
+  runWord = WORD_POOL[Math.floor(Math.random() * WORD_POOL.length)];
+  letterCollected = Array.from({ length: runWord.length }, () => false);
+  letterPending = false;
+  letterDelay = 0;
+  scheduleLetterForLevel();
+  updateWordHud();
+}
+
+function scheduleLetterForLevel(): void {
+  const index = level - 1;
+  if (index < 0 || index >= runWord.length || letterCollected[index]) {
+    letterPending = false;
+    return;
+  }
+  if (objects.some((object) => object.type === "letter" && object.letterIndex === index)) {
+    letterPending = false;
+    return;
+  }
+  letterPending = true;
+  letterDelay = 1.2 + Math.random() * 5.5;
+}
+
+function spawnLetter(): void {
+  const index = level - 1;
+  letterPending = false;
+  if (index < 0 || index >= runWord.length || letterCollected[index]) return;
+  if (objects.some((object) => object.type === "letter" && object.letterIndex === index)) return;
+  const z = -90 - Math.random() * 10;
+  const safe = [0, 1, 2].filter((lane) => laneClearOf(lane, z, z, ["dog", "carrier"], 12));
+  const lane = safe.length > 0 ? safe[Math.floor(Math.random() * safe.length)] : Math.floor(Math.random() * 3);
+  spawnObject("letter", lane, 0, z, { glyph: runWord[index], letterIndex: index });
+}
+
+function updateWordHud(): void {
+  ui.wordTrack.replaceChildren(
+    ...runWord.split("").map((glyph, index) => {
+      const letter = document.createElement("span");
+      letter.className = letterCollected[index] ? "word-letter collected" : "word-letter";
+      letter.textContent = glyph;
+      return letter;
+    }),
+  );
+}
+
+function tryJump(): void {
+  if (state !== "running" || jumpY > 0.04) return;
+  jumpVelocity = JUMP_VELOCITY;
+}
+
+function updateJump(delta: number): void {
+  if (state !== "running") {
+    jumpY = 0;
+    jumpVelocity = 0;
+    playerRoot.position.y = 0;
+    return;
+  }
+  jumpVelocity -= JUMP_GRAVITY * delta;
+  jumpY = Math.max(0, jumpY + jumpVelocity * delta);
+  if (jumpY === 0) jumpVelocity = 0;
+  playerRoot.position.y = jumpY;
 }
 
 function startRun(): void {
@@ -1307,6 +1410,10 @@ function startRun(): void {
   runTime = 0;
   stridePhase = 0;
   invulnerableUntil = 0;
+  jumpY = 0;
+  jumpVelocity = 0;
+  playerRoot.position.y = 0;
+  pickRunWord();
   saveEconomy();
   setEnvironment(0);
   rebuildPack();
@@ -1339,8 +1446,14 @@ function continueRun(): void {
   nextSpawn = snapshot.nextSpawn;
   runTime = snapshot.runTime;
   stridePhase = snapshot.stridePhase;
+  runWord = snapshot.runWord;
+  letterCollected = snapshot.letterCollected.slice();
   lastHintLane = laneIndex;
   invulnerableUntil = runTime + 2.5;
+  jumpY = 0;
+  jumpVelocity = 0;
+  playerRoot.position.y = 0;
+  scheduleLetterForLevel();
   setEnvironment(snapshot.environmentIndex);
   rebuildPack();
   updateResourceHud();
@@ -1349,6 +1462,7 @@ function continueRun(): void {
   ui.hud.classList.remove("hidden");
   audio.start();
   showToast(t("toast.continue"));
+  updateWordHud();
 }
 
 function endRun(): void {
@@ -1425,17 +1539,35 @@ function bindControls(): void {
   window.addEventListener("keydown", (event) => {
     if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") shiftLane(-1);
     if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") shiftLane(1);
-    if ((event.key === " " || event.key === "Enter") && state !== "running") {
+    if (event.key === "ArrowUp" || event.key.toLowerCase() === "w") {
+      event.preventDefault();
+      tryJump();
+    }
+    if (event.key === " ") {
+      event.preventDefault();
+      if (state === "running") tryJump();
+      else if (!(event.target instanceof HTMLButtonElement || event.target instanceof HTMLSelectElement)) {
+        startRun();
+      }
+      return;
+    }
+    if (event.key === "Enter" && state !== "running") {
       if (event.target instanceof HTMLButtonElement || event.target instanceof HTMLSelectElement) return;
       startRun();
     }
   });
   canvas.addEventListener("pointerdown", (event) => {
     swipeStartX = event.clientX;
+    swipeStartY = event.clientY;
   });
   canvas.addEventListener("pointerup", (event) => {
-    const delta = event.clientX - swipeStartX;
-    if (Math.abs(delta) > 24) shiftLane(delta > 0 ? 1 : -1);
+    const deltaX = event.clientX - swipeStartX;
+    const deltaY = event.clientY - swipeStartY;
+    if (Math.abs(deltaY) > 28 && Math.abs(deltaY) >= Math.abs(deltaX)) {
+      if (deltaY < 0) tryJump();
+      return;
+    }
+    if (Math.abs(deltaX) > 24) shiftLane(deltaX > 0 ? 1 : -1);
     else {
       const bounds = canvas.getBoundingClientRect();
       shiftLane(event.clientX < bounds.left + bounds.width / 2 ? -1 : 1);
@@ -1500,6 +1632,7 @@ function update(time: number): void {
   }
   elapsed += delta;
   updateEnvironmentTransition(delta);
+  updateJump(delta);
 
   if (state === "running") {
     runTime += delta;
@@ -1516,10 +1649,15 @@ function update(time: number): void {
       nextSpawn = THREE.MathUtils.randFloat(21, 29);
       spawnWave();
     }
+    if (letterPending) {
+      letterDelay -= delta;
+      if (letterDelay <= 0) spawnLetter();
+    }
     const nextLevel = Math.floor(distance / 250) + 1;
     if (nextLevel > level) {
       level = nextLevel;
       beginEnvironmentTransition(level - 1);
+      scheduleLetterForLevel();
       showToast(t("toast.level", {
         level,
         world: t(getEnvironment(environmentIndex).nameKey),
@@ -1536,6 +1674,7 @@ function update(time: number): void {
   }
 
   camera.position.x = damp(camera.position.x, playerRoot.position.x * 0.16, 2.8, delta);
+  camera.position.y = damp(camera.position.y, 7.7 + jumpY * 0.18, 6, delta);
   renderer.render(scene, camera);
 }
 
@@ -1607,6 +1746,8 @@ function updateObjects(travel: number, delta: number): void {
     object.mesh.position.z += travel;
     if (object.type === "hint") {
       object.mesh.position.y = 0.06;
+    } else if (object.type === "letter") {
+      object.mesh.position.y = LETTER_HEIGHT + Math.sin(elapsed * 3.4 + object.phase) * 0.12;
     } else if (object.type === "coin") {
       object.mesh.rotation.z = Math.sin(elapsed * 2.4 + object.phase) * 0.08;
       object.mesh.position.y = 0.55 + Math.sin(elapsed * 3.1 + object.phase) * 0.05;
@@ -1627,6 +1768,15 @@ function updateObjects(travel: number, delta: number): void {
       Math.abs(object.mesh.position.z - PLAYER_Z) < hitWindow ||
       (previousZ < PLAYER_Z && object.mesh.position.z > PLAYER_Z);
     if (closeZ && object.lane === laneIndex) {
+      if (object.type === "letter") {
+        if (jumpY >= LETTER_CATCH) {
+          collect(object);
+          removeRunnerObject(i);
+        }
+        continue;
+      }
+      const airborne = jumpY >= 0.85;
+      if (object.type === "dog" && airborne) continue;
       const hazard = object.type === "dog" || object.type === "carrier";
       if (!(hazard && runTime < invulnerableUntil)) collect(object);
       removeRunnerObject(i);
@@ -1640,6 +1790,23 @@ function collect(object: RunnerObject): void {
   const { type } = object;
   if (type === "hint") return;
   spawnScreenSparkles(type);
+  if (type === "letter") {
+    const index = object.letterIndex ?? -1;
+    if (index >= 0 && index < letterCollected.length && !letterCollected[index]) {
+      letterCollected[index] = true;
+      audio.pickup(true);
+      updateWordHud();
+      if (letterCollected.every(Boolean)) {
+        const bonus = wordBonus(runWord.length);
+        killScore += bonus;
+        audio.victory();
+        showToast(t("toast.word", { word: runWord, score: bonus }), "letter");
+      } else {
+        showToast(t("toast.letter", { letter: object.glyph ?? "" }), "letter");
+      }
+    }
+    return;
+  }
   if (type === "coin") {
     wallet += 1;
     killScore += SCORE_COIN;
@@ -1708,6 +1875,8 @@ function loseLife(): void {
       nextSpawn,
       runTime,
       stridePhase,
+      runWord,
+      letterCollected: letterCollected.slice(),
     };
     catCount = 0;
     ui.cats.textContent = "0";
