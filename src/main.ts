@@ -10,7 +10,7 @@ import {
   makeEnvironmentSky,
   makeEnvironmentTrack,
 } from "./environments";
-import { translate, type Language, type TranslationKey } from "./i18n";
+import { translate, translations, type Language, type TranslationKey } from "./i18n";
 
 type RunState = "menu" | "running" | "gameover";
 type PickupType = "cat" | "tuna" | "dog" | "carrier" | "coin" | "hint";
@@ -193,8 +193,6 @@ const skyRoot = new THREE.Group();
 scene.add(skyRoot);
 
 const audio = new CityAudio();
-const timer = new THREE.Timer();
-timer.connect(document);
 const trackTiles: THREE.Group[] = [];
 const decorTiles: THREE.Group[] = [];
 const objects: RunnerObject[] = [];
@@ -228,6 +226,7 @@ let accessoryEnvironmentIndex = 0;
 let transitionTilesRemaining = 0;
 let environmentTransition: EnvironmentTransition | undefined;
 let language: Language = "en";
+let lastFrameTime = 0;
 
 loadEconomy();
 setEnvironment(0);
@@ -251,6 +250,7 @@ function t(key: TranslationKey, values: Record<string, string | number> = {}): s
 
 function applyLanguage(): void {
   document.documentElement.lang = language;
+  ui.language.value = language;
   document.querySelectorAll<HTMLElement>("[data-i18n]").forEach((element) => {
     const key = element.dataset.i18n as TranslationKey | undefined;
     if (key) element.textContent = t(key);
@@ -1410,8 +1410,9 @@ function bindControls(): void {
   ui.buyLife.addEventListener("click", () => buyUpgrade("life"));
   ui.buyCat.addEventListener("click", () => buyUpgrade("cat"));
   ui.language.addEventListener("change", () => {
-    language = ui.language.value as Language;
+    language = isLanguage(ui.language.value) ? ui.language.value : "en";
     applyLanguage();
+    saveEconomy();
   });
   ui.sound.addEventListener("click", () => {
     const muted = audio.toggle();
@@ -1450,6 +1451,7 @@ function bindAppLifecycle(): void {
     }
   };
   document.addEventListener("visibilitychange", () => {
+    lastFrameTime = 0;
     updateAudioState(document.visibilityState === "visible");
   });
   window.addEventListener("pagehide", () => updateAudioState(false));
@@ -1479,9 +1481,19 @@ function resize(): void {
   camera.updateProjectionMatrix();
 }
 
-function update(): void {
-  timer.update();
-  const delta = Math.min(timer.getDelta(), 0.05);
+function damp(current: number, target: number, lambda: number, delta: number): number {
+  return current + (target - current) * (1 - Math.exp(-lambda * delta));
+}
+
+function update(time: number): void {
+  if (!Number.isFinite(time)) time = performance.now();
+  if (lastFrameTime === 0) lastFrameTime = time;
+  const delta = Math.min(Math.max((time - lastFrameTime) / 1000, 0), 0.05);
+  lastFrameTime = time;
+  if (document.hidden) {
+    renderer.render(scene, camera);
+    return;
+  }
   elapsed += delta;
   updateEnvironmentTransition(delta);
 
@@ -1519,7 +1531,7 @@ function update(): void {
     updatePack(delta);
   }
 
-  camera.position.x += (playerRoot.position.x * 0.16 - camera.position.x) * Math.min(1, delta * 2.8);
+  camera.position.x = damp(camera.position.x, playerRoot.position.x * 0.16, 2.8, delta);
   renderer.render(scene, camera);
 }
 
@@ -1574,7 +1586,7 @@ function syncAccessoriesWithCurrentTrack(): void {
 }
 
 function updatePack(delta: number): void {
-  playerRoot.position.x += (targetX - playerRoot.position.x) * Math.min(1, delta * 11);
+  playerRoot.position.x = damp(playerRoot.position.x, targetX, 11, delta);
   playerRoot.children.forEach((cat, index) => {
     const phase = Number(cat.userData.phase ?? 0);
     cat.position.y = 0.55 + Math.abs(Math.sin(stridePhase + phase)) * 0.2;
@@ -1606,8 +1618,9 @@ function updateObjects(travel: number, delta: number): void {
       continue;
     }
 
+    const hitWindow = Math.max(1.25, travel);
     const closeZ =
-      Math.abs(object.mesh.position.z - PLAYER_Z) < 1.25 ||
+      Math.abs(object.mesh.position.z - PLAYER_Z) < hitWindow ||
       (previousZ < PLAYER_Z && object.mesh.position.z > PLAYER_Z);
     if (closeZ && object.lane === laneIndex) {
       const hazard = object.type === "dog" || object.type === "carrier";
@@ -1709,18 +1722,24 @@ function loseLife(): void {
   showToast(t("toast.lifeUsed"));
 }
 
+function isLanguage(value: unknown): value is Language {
+  return typeof value === "string" && value in translations;
+}
+
 function loadEconomy(): void {
   try {
     const raw = localStorage.getItem(ECONOMY_KEY);
     if (!raw) return;
-    const saved = JSON.parse(raw) as { coins?: number; lives?: number; cats?: number };
+    const saved = JSON.parse(raw) as { coins?: number; lives?: number; cats?: number; language?: string };
     wallet = Math.max(0, Math.floor(Number(saved.coins) || 0));
     bankedLives = Math.max(0, Math.floor(Number(saved.lives) || 0));
     purchasedCats = Math.max(0, Math.floor(Number(saved.cats) || 0));
+    language = isLanguage(saved.language) ? saved.language : "en";
   } catch {
     wallet = 0;
     bankedLives = 0;
     purchasedCats = 0;
+    language = "en";
   }
 }
 
@@ -1729,6 +1748,7 @@ function saveEconomy(): void {
     coins: wallet,
     lives: bankedLives,
     cats: purchasedCats,
+    language,
   }));
 }
 
