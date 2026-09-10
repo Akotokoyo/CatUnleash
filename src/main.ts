@@ -1431,10 +1431,14 @@ function bindControls(): void {
   canvas.addEventListener("pointerup", (event) => {
     const delta = event.clientX - swipeStartX;
     if (Math.abs(delta) > 24) shiftLane(delta > 0 ? 1 : -1);
-    else shiftLane(event.clientX < window.innerWidth / 2 ? -1 : 1);
+    else {
+      const bounds = canvas.getBoundingClientRect();
+      shiftLane(event.clientX < bounds.left + bounds.width / 2 ? -1 : 1);
+    }
   });
   window.addEventListener("resize", resize);
   new ResizeObserver(resize).observe(canvas);
+  new ResizeObserver(resize).observe(canvas.parentElement ?? canvas);
 }
 
 function bindAppLifecycle(): void {
