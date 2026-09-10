@@ -13,7 +13,7 @@ export class CityAudio {
       this.master = this.context.createGain();
       this.sfxBus = this.context.createGain();
       this.master.gain.value = 1;
-      this.sfxBus.gain.value = 1;
+      this.sfxBus.gain.value = 0.85;
       this.sfxBus.connect(this.master);
       this.master.connect(this.context.destination);
       void this.loadSample("meow", `${import.meta.env.BASE_URL}audio/cat-meow.ogg`);
@@ -23,9 +23,9 @@ export class CityAudio {
     if (!this.music) {
       this.music = new Audio(`${import.meta.env.BASE_URL}audio/main.mp3`);
       this.music.loop = true;
-      this.music.volume = 0.7;
       this.music.preload = "auto";
     }
+    this.music.volume = 0.28;
     this.music.muted = this.muted;
     void this.music.play();
   }
@@ -47,6 +47,7 @@ export class CityAudio {
   resume(): void {
     if (!this.context || !this.music) return;
     void this.context.resume();
+    this.music.volume = 0.28;
     this.music.muted = this.muted;
     void this.music.play();
   }
@@ -104,7 +105,7 @@ export class CityAudio {
     const source = this.context.createBufferSource();
     const gain = this.context.createGain();
     source.buffer = buffer;
-    gain.gain.value = 1;
+    gain.gain.value = 0.9;
     source.connect(gain).connect(this.sfxBus);
     source.start();
   }

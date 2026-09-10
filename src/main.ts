@@ -1128,38 +1128,43 @@ function makeDog(coat: DogCoat = DOG_COATS[0]): THREE.Group {
 
 function makeDogPack(strength: number): THREE.Group {
   const group = new THREE.Group();
-  for (let i = 0; i < Math.min(strength, 5); i += 1) {
-    const dog = makeDog(DOG_COATS[i % DOG_COATS.length]);
-    addAnimalAccessory(dog, "dog", accessoryEnvironmentIndex);
-    dog.rotation.y = Math.PI;
-    dog.position.set((i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.82, 0.08, Math.floor(i / 2) * 0.8);
-    group.add(dog);
-  }
+  const dog = makeDog(DOG_COATS[(strength - 1) % DOG_COATS.length]);
+  addAnimalAccessory(dog, "dog", accessoryEnvironmentIndex);
+  dog.rotation.y = Math.PI;
+  dog.position.set(0, 0.08, 0);
+  group.add(dog);
   const badge = makeBadge(`−${strength}`);
-  badge.position.set(0, 2.15, 0);
+  badge.position.set(0, 2.05, 0);
   group.add(badge);
   return group;
 }
 
 function makeBadge(value: string | number): THREE.Sprite {
   const badgeCanvas = document.createElement("canvas");
-  badgeCanvas.width = badgeCanvas.height = 128;
+  badgeCanvas.width = 256;
+  badgeCanvas.height = 128;
   const context = badgeCanvas.getContext("2d");
   if (!context) throw new Error("Canvas 2D non disponibile");
+  const radius = 54;
   context.fillStyle = "#e45b4a";
   context.beginPath();
-  context.arc(64, 64, 54, 0, Math.PI * 2);
+  context.roundRect(12, 16, 232, 96, radius);
   context.fill();
   context.strokeStyle = "#2b1c16";
   context.lineWidth = 10;
   context.stroke();
   context.fillStyle = "#fff8ee";
-  context.font = "bold 58px sans-serif";
+  context.font = "bold 72px sans-serif";
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.fillText(String(value), 64, 68);
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(badgeCanvas) }));
-  sprite.scale.set(1.15, 1.15, 1);
+  context.fillText(String(value), 128, 68);
+  const map = new THREE.CanvasTexture(badgeCanvas);
+  map.needsUpdate = true;
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map, depthTest: false, depthWrite: false }),
+  );
+  sprite.scale.set(1.85, 0.92, 1);
+  sprite.renderOrder = 12;
   return sprite;
 }
 
