@@ -6,20 +6,23 @@
     <meta name="theme-color" content="#071b1b" />
     <meta name="description" content="CatUnleashed — build your cat pack across an endless sequence of worlds." />
     <title>CatUnleashed</title>
-    <script type="module" crossorigin src="./assets/index-D5aG-zoK.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CDvq_wO1.css">
+    <script type="module" crossorigin src="./assets/index-CdtVqlPu.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CjJenCB-.css">
   </head>
   <body>
     <main id="app">
       <canvas id="game" aria-label="CatUnleashed"></canvas>
 
       <section id="hud" class="hidden" aria-live="polite">
-        <div class="hud-stat"><span data-i18n="hud.distance">DISTANCE</span><strong id="score">0</strong></div>
+        <div class="hud-stat"><span data-i18n="hud.score">SCORE</span><strong id="score">0</strong></div>
         <div class="hud-stat cats"><span data-i18n="hud.pack">PACK</span><strong id="cats">1</strong></div>
         <div class="hud-stat"><span data-i18n="hud.speed">SPEED</span><strong id="speed">1.0×</strong></div>
         <div class="hud-stat tuna"><span data-i18n="hud.tuna">TUNA</span><strong id="tuna">0/20</strong></div>
         <div class="hud-stat lives"><span data-i18n="hud.lives">LIVES</span><strong id="lives">0</strong></div>
+        <div class="hud-stat coins"><span data-i18n="hud.coins">BISCUITS</span><strong id="coins">0</strong></div>
+        <div id="word-track" class="word-track" aria-live="polite"></div>
       </section>
+      <button id="pause" class="hidden" type="button" data-i18n-aria="pause.label">II</button>
 
       <section id="menu" class="panel">
         <div class="language-picker">
@@ -35,15 +38,61 @@
         <p class="eyebrow" data-i18n="menu.eyebrow">THE CITY RUN</p>
         <h1>CAT<span>UNLEASHED</span></h1>
         <p class="tagline" data-i18n="menu.tagline">Build the pack. Rule every world.</p>
-        <button id="play" class="sun-button" type="button" data-i18n="menu.play">PLAY</button>
+        <div class="menu-actions">
+          <button id="play" class="sun-button" type="button" data-i18n="menu.play">PLAY</button>
+          <button id="tutorial-replay" class="menu-button" type="button" data-i18n="menu.tutorial">TUTORIAL</button>
+          <button id="achievements-open" class="menu-button" type="button" data-i18n="menu.achievements">ACHIEVEMENTS</button>
+        </div>
+        <div class="shop">
+          <div class="shop-wallet">
+            <span class="coin-icon" aria-hidden="true"></span>
+            <strong id="menu-coins">0</strong>
+            <span data-i18n="shop.coins">BISCUITS</span>
+          </div>
+          <div class="shop-actions">
+            <button id="buy-life" class="shop-button" type="button">
+              <b>❤️</b>
+              <span>
+                <strong data-i18n="shop.life">Extra life</strong>
+                <small data-i18n="shop.lifeHint">200 biscuits</small>
+              </span>
+            </button>
+            <button id="buy-cat" class="shop-button" type="button">
+              <b>🐱</b>
+              <span>
+                <strong data-i18n="shop.cat">Cat</strong>
+                <small data-i18n="shop.catHint">20 biscuits each</small>
+              </span>
+            </button>
+          </div>
+          <p class="shop-stock" id="shop-stock"></p>
+        </div>
         <div class="instructions">
           <div><b>🐱</b><span><span data-i18n="menu.cat">Cat</span><br /><small data-i18n="menu.catHint">+1 to the pack</small></span></div>
           <div><b>🐟</b><span><span data-i18n="menu.tuna">Tuna</span><br /><small data-i18n="menu.tunaHint">20 = +1 life</small></span></div>
-          <div><b>🐶</b><span><span data-i18n="menu.dogs">Dogs</span><br /><small data-i18n="menu.dogsHint">−cats + points</small></span></div>
+          <div><b>🐶</b><span><span data-i18n="menu.dogs">Dogs</span><br /><small data-i18n="menu.dogsHint">the number = cats they take</small></span></div>
           <div><b>🧳</b><span><span data-i18n="menu.carrier">Cat carrier</span><br /><small data-i18n="menu.carrierHint">instant KO</small></span></div>
+          <div class="wide"><b>🐾</b><span><span data-i18n="menu.coin">Paw biscuit</span><br /><small data-i18n="menu.coinHint">follow the snack path</small></span></div>
+          <div class="wide"><b>A</b><span><span data-i18n="menu.letter">Letters</span><br /><small data-i18n="menu.letterHint">jump to catch them, in order</small></span></div>
         </div>
-        <p class="controls" data-i18n="menu.controls">Swipe or use ← → to change lane</p>
+        <p class="controls" data-i18n="menu.controls">Swipe ← → or use the arrows to change lane · swipe up or ↑ to jump</p>
       </section>
+
+      <section id="achievements" class="panel hidden">
+        <p class="eyebrow" data-i18n="menu.achievements">ACHIEVEMENTS</p>
+        <h2 data-i18n="ach.title">TROPHIES</h2>
+        <p class="ach-progress" id="ach-progress"></p>
+        <div id="ach-list" class="ach-list"></div>
+        <button id="achievements-back" class="menu-button" type="button" data-i18n="ach.back">BACK</button>
+      </section>
+
+      <section id="pause-menu" class="panel hidden">
+        <p class="eyebrow" data-i18n="pause.eyebrow">TIME OUT</p>
+        <h2 data-i18n="pause.title">PAUSED</h2>
+        <button id="pause-resume" class="sun-button" type="button" data-i18n="pause.resume">RESUME</button>
+        <button id="pause-quit" class="menu-button" type="button" data-i18n="pause.menu">MAIN MENU</button>
+      </section>
+      <div id="countdown" class="hidden" aria-live="assertive">3</div>
 
       <section id="gameover" class="panel hidden">
         <p class="eyebrow" data-i18n="over.eyebrow">THE RUN ENDS</p>
@@ -52,12 +101,28 @@
         <div class="result-row">
           <span><span data-i18n="over.distance">Distance</span> <b id="final-distance">0m</b></span>
           <span><span data-i18n="over.dogs">Dogs</span> <b id="final-dogs">0</b></span>
+          <span><span data-i18n="over.coins">Biscuits</span> <b id="final-coins">0</b></span>
         </div>
+        <button id="continue-run" class="sun-button continue-button hidden" type="button">
+          <span data-i18n="over.continue">CONTINUE</span>
+          <small data-i18n="over.continueHint">1000 biscuits · resume here</small>
+        </button>
         <button id="restart" class="sun-button" type="button" data-i18n="over.retry">TRY AGAIN</button>
         <button id="back-menu" class="menu-button" type="button" data-i18n="over.menu">MAIN MENU</button>
       </section>
 
       <button id="sound" type="button" aria-label="Toggle sound">♪</button>
+      <div id="tutorial" class="hidden">
+        <div class="tutorial-card">
+          <p id="tutorial-text"></p>
+          <button id="tutorial-skip" type="button" data-i18n="tutorial.skip">SKIP</button>
+        </div>
+      </div>
+      <div id="achievement-toast" class="hidden" role="status">
+        <p data-i18n="ach.unlock">Achievement Unlocked</p>
+        <strong id="achievement-title"></strong>
+        <span id="achievement-desc"></span>
+      </div>
       <div id="collect-fx" aria-hidden="true"></div>
       <div id="toast" role="status"></div>
     </main>

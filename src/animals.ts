@@ -35,7 +35,7 @@ let loadPromise: Promise<void> | undefined;
 const tintMaps = new Map<string, THREE.CanvasTexture>();
 
 function modelUrl(file: string): string {
-  return `${import.meta.env.BASE_URL}${encodeURI("Models/GLB format")}/${file}`;
+  return new URL(`models/${file}`, document.baseURI).href;
 }
 
 export function hasAnimalModels(): boolean {
